@@ -57,6 +57,7 @@ const commonInclude = [
 router.get('/', async (req, res) => {
   try {
     const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
+    console.log('Campaign query - viewerId:', viewerId, 'viewerRole:', viewerRole, 'viewerCompany:', viewerCompany);
 
     let whereClause;
     if (viewerRole === '대행사 어드민') {
@@ -74,7 +75,10 @@ router.get('/', async (req, res) => {
       }
     } else if (viewerRole === '클라이언트') {
       whereClause = { userId: viewerId };
+      console.log('Client where clause:', whereClause);
     } // 슈퍼 어드민은 where 없음
+    
+    console.log('Final where clause:', whereClause);
 
     const campaigns = await Campaign.findAll({
       where: whereClause,
