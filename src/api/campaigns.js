@@ -109,6 +109,12 @@ router.get('/', async (req, res) => {
 
     console.log('Found campaigns count:', campaigns.length);
     console.log('Campaign userIds:', campaigns.map(c => ({ id: c.id, name: c.name, userId: c.userId })));
+    console.log('Campaign posts:', campaigns.map(c => ({ 
+      id: c.id, 
+      name: c.name, 
+      postsCount: c.posts?.length || 0,
+      posts: c.posts?.map(p => ({ id: p.id, title: p.title })) || []
+    })));
 
     res.json(campaigns);
   } catch (error) {
