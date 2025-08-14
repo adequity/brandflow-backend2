@@ -91,6 +91,9 @@ router.get('/', async (req, res) => {
       subQuery: false, // include 컬럼을 where에서 참조할 때 안전
     });
 
+    console.log('Found campaigns count:', campaigns.length);
+    console.log('Campaign userIds:', campaigns.map(c => ({ id: c.id, name: c.name, userId: c.userId })));
+
     res.json(campaigns);
   } catch (error) {
     console.error('캠페인 조회 실패:', error);
