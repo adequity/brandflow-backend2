@@ -112,13 +112,22 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
+    console.log('Campaign creation request body:', req.body);
+    console.log('Query params:', req.query);
+    
     const name = String(req.body?.name || '').trim();
     const client = String(req.body?.client || '').trim();
     const userId = Number(req.body?.userId);
     const managerId = Number(req.body?.managerId);
 
+    console.log('Parsed values:', { name, client, userId, managerId });
+
     if (!name || !userId || !managerId) {
-      return res.status(400).json({ message: '필수 필드가 누락되었습니다.' });
+      console.log('Missing required fields:', { name: !!name, userId: !!userId, managerId: !!managerId });
+      return res.status(400).json({ 
+        message: '필수 필드가 누락되었습니다.',
+        details: { name: !!name, userId: !!userId, managerId: !!managerId }
+      });
     }
 
     const { viewerRole, viewerCompany } = await getViewer(req);
