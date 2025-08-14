@@ -258,4 +258,41 @@ router.post('/:campaignId/posts', async (req, res) => {
   }
 });
 
+/**
+ * DELETE /api/campaigns/:id
+ * 캠페인 삭제 (슈퍼 어드민만 가능)
+ */
+router.delete('/:id', async (req, res) => {
+  try {
+    const campaignId = Number(req.params.id);
+    const { viewerId, viewerRole } = await getViewer(req);
+    
+    console.log('Campaign deletion request:', { campaignId, viewerId, viewerRole });
+    
+    // 슈퍼 어드민만 삭제 가능
+    if (viewerRole !== '슈퍼 어드민') {
+      return res.status(403).json({ message: '권한이 없습니다. 슈퍼 어드민만 캠페인을 삭제할 수 있습니다.' });
+    }
+    
+    // 캠페인 존재 확인
+    const campaign = await Campaign.findByPk(campaignId);
+    if (!campaign) {
+      return res.status(404).json({ message: '캠페인을 찾을 수 없습니다.' });
+    }
+    
+    // 연관된 posts도 함께 삭제 (CASCADE)
+    await Post.destroy({ where: { campaignId } });
+    
+    // 캠페인 삭제
+    await campaign.destroy();
+    
+    console.log('Campaign deleted successfully:', campaignId);
+    res.json({ message: '캠페인이 성공적으로 삭제되었습니다.' });
+    
+  } catch (error) {
+    console.error('캠페인 삭제 실패:', error);
+    res.status(500).json({ message: '서버 에러가 발생했습니다.' });
+  }
+});
+
 export default router;
