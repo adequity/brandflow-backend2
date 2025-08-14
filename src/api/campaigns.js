@@ -61,7 +61,8 @@ router.get('/', async (req, res) => {
     let whereClause;
     if (viewerRole === '대행사 어드민') {
       if (!viewerCompany) {
-        return res.status(400).json({ message: '대행사 정보가 없습니다.' });
+        // 대행사 어드민인데 company가 없으면 빈 결과 반환
+        return res.json([]);
       }
       whereClause = {
         [Op.or]: [

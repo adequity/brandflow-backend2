@@ -27,7 +27,8 @@ router.get('/', async (req, res) => {
 
     if (viewerRole === '대행사 어드민') {
       if (!viewerCompany) {
-        return res.status(400).json({ message: '대행사 정보가 없습니다.' });
+        // 대행사 어드민인데 company가 없으면 빈 결과 반환
+        return res.json([]);
       }
       where.company = viewerCompany; // 같은 회사만
     } else if (viewerRole === '클라이언트') {
@@ -94,12 +95,12 @@ router.post('/', async (req, res) => {
       return res.status(403).json({ message: '권한이 없습니다. 관리자만 사용자를 생성할 수 있습니다.' });
     }
 
+    const { name, email, password, role, company, contact } = req.body;
+
     // 대행사 어드민은 클라이언트만 생성 가능
     if (viewerRole === '대행사 어드민' && role !== '클라이언트') {
       return res.status(403).json({ message: '대행사 어드민은 클라이언트 계정만 생성할 수 있습니다.' });
     }
-
-    const { name, email, password, role, company, contact } = req.body;
 
     // 필수 필드 검증
     if (!name || !email || !password || !role) {
@@ -231,7 +232,8 @@ router.get('/clients', async (req, res) => {
     // 대행사 어드민은 같은 회사 클라이언트만
     if (viewerRole === '대행사 어드민') {
       if (!viewerCompany) {
-        return res.status(400).json({ message: '대행사 정보가 없습니다.' });
+        // 대행사 어드민인데 company가 없으면 빈 결과 반환
+        return res.json([]);
       }
       where.company = viewerCompany;
     }
