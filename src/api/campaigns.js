@@ -61,15 +61,17 @@ router.get('/', async (req, res) => {
     let whereClause;
     if (viewerRole === '대행사 어드민') {
       if (!viewerCompany) {
-        // 대행사 어드민인데 company가 없으면 빈 결과 반환
-        return res.json([]);
+        // company가 없는 대행사 어드민은 자신이 담당자인 캠페인만 조회
+        whereClause = { managerId: viewerId };
+      } else {
+        whereClause = {
+          [Op.or]: [
+            { '$User.company$':   { [Op.eq]: viewerCompany } },
+            { '$Client.company$': { [Op.eq]: viewerCompany } },
+            { managerId: viewerId }, // 자신이 담당자인 캠페인도 포함
+          ],
+        };
       }
-      whereClause = {
-        [Op.or]: [
-          { '$User.company$':   { [Op.eq]: viewerCompany } },
-          { '$Client.company$': { [Op.eq]: viewerCompany } },
-        ],
-      };
     } else if (viewerRole === '클라이언트') {
       whereClause = { userId: viewerId };
     } // 슈퍼 어드민은 where 없음
