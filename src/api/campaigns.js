@@ -213,15 +213,28 @@ router.post('/:campaignId/posts', async (req, res) => {
     if (!campaign) return res.status(404).json({ message: '캠페인을 찾을 수 없습니다.' });
 
     // 권한/테넌트 검증
+    console.log('Topic registration permission check:');
+    console.log('- viewerId:', viewerId, 'viewerRole:', viewerRole, 'viewerCompany:', viewerCompany);
+    console.log('- campaign.managerId:', campaign.managerId, 'campaign.userId:', campaign.userId);
+    console.log('- campaign.User:', campaign.User);
+    console.log('- campaign.Client:', campaign.Client);
+    
     if (viewerRole === '대행사 어드민') {
       // 대행사 어드민은 자신이 담당자이거나, 같은 회사 클라이언트의 캠페인에 주제 등록 가능
       const isManager = campaign.managerId === viewerId;
       const isSameCompanyClient = viewerCompany && campaign.Client?.company === viewerCompany;
       const isSuperAdminCampaign = campaign.User?.role === '슈퍼 어드민'; // 슈퍼 어드민 캠페인도 허용
       
+      console.log('Permission checks:');
+      console.log('- isManager:', isManager);
+      console.log('- isSameCompanyClient:', isSameCompanyClient);
+      console.log('- isSuperAdminCampaign:', isSuperAdminCampaign);
+      
       if (!isManager && !isSameCompanyClient && !isSuperAdminCampaign) {
+        console.log('Permission denied for agency admin');
         return res.status(403).json({ message: '권한이 없습니다.' });
       }
+      console.log('Permission granted for agency admin');
     } else if (viewerRole === '클라이언트' && campaign.userId !== viewerId) {
       return res.status(403).json({ message: '권한이 없습니다.' });
     }
