@@ -11,11 +11,19 @@ const router = express.Router();
  * - company 는 DB(User)에서 확정
  */
 async function getViewer(req) {
-  const viewerId = Number(req.query.viewerId || req.query.adminId);
-  const viewerRole = String(req.query.viewerRole || req.query.adminRole || '').trim();
+  // 파라미터가 배열로 올 경우 첫 번째 값만 사용
+  const rawViewerId = req.query.viewerId || req.query.adminId;
+  const rawViewerRole = req.query.viewerRole || req.query.adminRole || '';
+  
+  const viewerId = Number(Array.isArray(rawViewerId) ? rawViewerId[0] : rawViewerId);
+  const viewerRole = String(Array.isArray(rawViewerRole) ? rawViewerRole[0] : rawViewerRole).trim();
+  
+  console.log('Raw params:', { rawViewerId, rawViewerRole });
+  console.log('Parsed params:', { viewerId, viewerRole });
+  
   let viewerCompany = null;
 
-  if (viewerId) {
+  if (viewerId && !isNaN(viewerId)) {
     const v = await User.findByPk(viewerId, { attributes: ['id', 'company', 'role'] });
     viewerCompany = v?.company ?? null;
   }
