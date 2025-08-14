@@ -32,6 +32,12 @@ const Post = sequelize.define('Post', {
     defaultValue: '블로그',
     comment: '업무 타입 (블로그, 디자인, 마케팅, 개발, 기타 등)'
   },
+  // 이미지 첨부 필드
+  images: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    comment: '첨부된 이미지 데이터 (JSON 배열)'
+  },
   creationTime: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,

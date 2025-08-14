@@ -7,7 +7,7 @@ const router = express.Router();
 router.put('/:id', async (req, res) => {
     const { id } = req.params;
     // 요청 본문에서 업데이트할 데이터들을 가져옵니다.
-    const { title, outline, publishedUrl, topicStatus, outlineStatus } = req.body;
+    const { title, outline, publishedUrl, topicStatus, outlineStatus, images } = req.body;
 
     try {
         const post = await Post.findByPk(id);
@@ -21,6 +21,7 @@ router.put('/:id', async (req, res) => {
         if (publishedUrl !== undefined) post.publishedUrl = publishedUrl;
         if (topicStatus !== undefined) post.topicStatus = topicStatus;
         if (outlineStatus !== undefined) post.outlineStatus = outlineStatus;
+        if (images !== undefined) post.images = images;
 
         await post.save();
         res.status(200).json(post);
