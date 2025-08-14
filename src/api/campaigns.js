@@ -78,8 +78,16 @@ router.get('/', async (req, res) => {
       }
     } else if (viewerRole === '클라이언트') {
       // 클라이언트는 자신의 캠페인만 조회 (userId 기준)
-      whereClause = { userId: viewerId };
-      console.log('Client where clause:', whereClause);
+      if (!viewerId || isNaN(viewerId)) {
+        console.error('Invalid viewerId for client:', viewerId);
+        return res.json([]);
+      }
+      whereClause = { userId: Number(viewerId) };
+      console.log('Client where clause:', whereClause, 'viewerId type:', typeof viewerId);
+    } else {
+      // 알 수 없는 역할인 경우 빈 결과 반환
+      console.error('Unknown viewer role:', viewerRole);
+      return res.json([]);
     }
     
     console.log('Final where clause:', whereClause);
