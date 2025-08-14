@@ -122,7 +122,7 @@ router.post('/', async (req, res) => {
     }
 
     const { viewerRole, viewerCompany } = await getViewer(req);
-    if (viewerRole === '대행사 어드민') {
+    if (viewerRole === '대행사 어드민' && viewerCompany) {
       const [manager, clientUser] = await Promise.all([
         User.findByPk(managerId, { attributes: ['id', 'company'] }),
         User.findByPk(userId,    { attributes: ['id', 'company'] }),
@@ -131,6 +131,7 @@ router.post('/', async (req, res) => {
         return res.status(403).json({ message: '권한이 없습니다.' });
       }
     }
+    // 슈퍼 어드민은 권한 체크 건너뛰기
 
     const created = await Campaign.create({ name, client, userId, managerId });
     const full = await Campaign.findByPk(created.id, { include: commonInclude });
