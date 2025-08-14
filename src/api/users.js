@@ -89,9 +89,14 @@ router.post('/', async (req, res) => {
   try {
     const { viewerId, viewerRole } = await getViewer(req);
     
-    // 권한 확인: 슈퍼 어드민만 사용자 생성 가능
-    if (viewerRole !== '슈퍼 어드민') {
-      return res.status(403).json({ message: '권한이 없습니다. 슈퍼 어드민만 사용자를 생성할 수 있습니다.' });
+    // 권한 확인: 슈퍼 어드민 또는 대행사 어드민만 사용자 생성 가능
+    if (viewerRole !== '슈퍼 어드민' && viewerRole !== '대행사 어드민') {
+      return res.status(403).json({ message: '권한이 없습니다. 관리자만 사용자를 생성할 수 있습니다.' });
+    }
+
+    // 대행사 어드민은 클라이언트만 생성 가능
+    if (viewerRole === '대행사 어드민' && role !== '클라이언트') {
+      return res.status(403).json({ message: '대행사 어드민은 클라이언트 계정만 생성할 수 있습니다.' });
     }
 
     const { name, email, password, role, company, contact } = req.body;
@@ -111,13 +116,20 @@ router.post('/', async (req, res) => {
     const bcrypt = await import('bcrypt');
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // 대행사 어드민이 생성하는 클라이언트는 자동으로 같은 회사 배정
+    let finalCompany = company;
+    if (viewerRole === '대행사 어드민') {
+      const viewer = await User.findByPk(viewerId, { attributes: ['company'] });
+      finalCompany = viewer?.company || company;
+    }
+
     // 사용자 생성
     const newUser = await User.create({
       name,
       email,
       password: hashedPassword,
       role,
-      company: company || null,
+      company: finalCompany || null,
       contact: contact || null,
       creatorId: viewerId
     });
@@ -206,6 +218,38 @@ router.delete('/:id', async (req, res) => {
 
   } catch (err) {
     console.error('사용자 삭제 실패:', err);
+    res.status(500).json({ message: '서버 에러가 발생했습니다.' });
+  }
+});
+
+/** GET /api/users/clients — 클라이언트 목록 조회 (캠페인 생성용) */
+router.get('/clients', async (req, res) => {
+  try {
+    const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
+    let where = { role: '클라이언트' };
+
+    // 대행사 어드민은 같은 회사 클라이언트만
+    if (viewerRole === '대행사 어드민') {
+      if (!viewerCompany) {
+        return res.status(400).json({ message: '대행사 정보가 없습니다.' });
+      }
+      where.company = viewerCompany;
+    }
+    // 슈퍼 어드민은 모든 클라이언트 조회 가능
+    // 클라이언트는 자기 자신만
+    else if (viewerRole === '클라이언트') {
+      where.id = viewerId;
+    }
+
+    const clients = await User.findAll({
+      where,
+      attributes: ['id', 'name', 'email', 'company'],
+      order: [['name', 'ASC']]
+    });
+
+    res.json(clients);
+  } catch (err) {
+    console.error('클라이언트 목록 조회 실패:', err);
     res.status(500).json({ message: '서버 에러가 발생했습니다.' });
   }
 });
