@@ -84,6 +84,130 @@ router.get('/:id/campaigns', async (req, res) => {
   }
 });
 
-/** (선택) POST/PUT에서도 회사 강제하고 싶으면 여기에 추가 */
+/** POST /api/users — 새 사용자 생성 */
+router.post('/', async (req, res) => {
+  try {
+    const { viewerId, viewerRole } = await getViewer(req);
+    
+    // 권한 확인: 슈퍼 어드민만 사용자 생성 가능
+    if (viewerRole !== '슈퍼 어드민') {
+      return res.status(403).json({ message: '권한이 없습니다. 슈퍼 어드민만 사용자를 생성할 수 있습니다.' });
+    }
+
+    const { name, email, password, role, company, contact } = req.body;
+
+    // 필수 필드 검증
+    if (!name || !email || !password || !role) {
+      return res.status(400).json({ message: '필수 필드가 누락되었습니다.' });
+    }
+
+    // 이메일 중복 확인
+    const existingUser = await User.findOne({ where: { email } });
+    if (existingUser) {
+      return res.status(400).json({ message: '이미 존재하는 이메일입니다.' });
+    }
+
+    // 비밀번호 해싱
+    const bcrypt = await import('bcrypt');
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 사용자 생성
+    const newUser = await User.create({
+      name,
+      email,
+      password: hashedPassword,
+      role,
+      company: company || null,
+      contact: contact || null,
+      creatorId: viewerId
+    });
+
+    // 비밀번호 제외하고 응답
+    const { password: _, ...userResponse } = newUser.toJSON();
+    res.status(201).json(userResponse);
+
+  } catch (err) {
+    console.error('사용자 생성 실패:', err);
+    if (err.name === 'SequelizeValidationError') {
+      return res.status(400).json({ message: '입력 데이터가 올바르지 않습니다.' });
+    }
+    res.status(500).json({ message: '서버 에러가 발생했습니다.' });
+  }
+});
+
+/** PUT /api/users/:id — 사용자 정보 수정 */
+router.put('/:id', async (req, res) => {
+  try {
+    const targetId = Number(req.params.id);
+    const { viewerId, viewerRole } = await getViewer(req);
+    const { name, email, role, company, contact } = req.body;
+
+    // 권한 확인
+    if (viewerRole !== '슈퍼 어드민' && viewerId !== targetId) {
+      return res.status(403).json({ message: '권한이 없습니다.' });
+    }
+
+    const user = await User.findByPk(targetId);
+    if (!user) {
+      return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
+    }
+
+    // 이메일 중복 확인 (다른 사용자와)
+    if (email && email !== user.email) {
+      const existingUser = await User.findOne({ where: { email } });
+      if (existingUser) {
+        return res.status(400).json({ message: '이미 존재하는 이메일입니다.' });
+      }
+    }
+
+    // 업데이트할 필드만 추가
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (email) updateData.email = email;
+    if (role) updateData.role = role;
+    if (company !== undefined) updateData.company = company;
+    if (contact !== undefined) updateData.contact = contact;
+
+    await user.update(updateData);
+
+    // 비밀번호 제외하고 응답
+    const { password: _, ...userResponse } = user.toJSON();
+    res.json(userResponse);
+
+  } catch (err) {
+    console.error('사용자 수정 실패:', err);
+    res.status(500).json({ message: '서버 에러가 발생했습니다.' });
+  }
+});
+
+/** DELETE /api/users/:id — 사용자 삭제 */
+router.delete('/:id', async (req, res) => {
+  try {
+    const targetId = Number(req.params.id);
+    const { viewerId, viewerRole } = await getViewer(req);
+
+    // 권한 확인: 슈퍼 어드민만 삭제 가능
+    if (viewerRole !== '슈퍼 어드민') {
+      return res.status(403).json({ message: '권한이 없습니다. 슈퍼 어드민만 사용자를 삭제할 수 있습니다.' });
+    }
+
+    // 자기 자신 삭제 방지
+    if (viewerId === targetId) {
+      return res.status(400).json({ message: '자기 자신은 삭제할 수 없습니다.' });
+    }
+
+    const user = await User.findByPk(targetId);
+    if (!user) {
+      return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
+    }
+
+    await user.destroy();
+    res.json({ message: '사용자가 삭제되었습니다.' });
+
+  } catch (err) {
+    console.error('사용자 삭제 실패:', err);
+    res.status(500).json({ message: '서버 에러가 발생했습니다.' });
+  }
+});
 
 export default router;
