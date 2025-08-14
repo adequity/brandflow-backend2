@@ -25,6 +25,13 @@ const Post = sequelize.define('Post', {
     type: DataTypes.TEXT, // 반려 사유는 길 수 있으므로 TEXT 타입으로 설정
     allowNull: true,      // 반려되지 않은 경우 값은 비어있을 수 있음 (NULL)
   },
+  // 업무 타입 필드 (범용 업무 관리를 위한 확장)
+  workType: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    defaultValue: '블로그',
+    comment: '업무 타입 (블로그, 디자인, 마케팅, 개발, 기타 등)'
+  },
   creationTime: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,

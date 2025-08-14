@@ -41,6 +41,7 @@ const postsInclude = {
     'topicStatus',
     'outlineStatus',
     'publishedUrl',
+    'workType',
     'createdAt',
     'updatedAt',
   ],
@@ -206,6 +207,8 @@ router.post('/:campaignId/posts', async (req, res) => {
   try {
     const { campaignId } = req.params;
     const title = String(req.body?.title || '').trim();
+    const workType = String(req.body?.workType || '블로그').trim();
+    
     if (!title) return res.status(400).json({ message: 'title은 필수입니다.' });
 
     const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
@@ -247,6 +250,7 @@ router.post('/:campaignId/posts', async (req, res) => {
 
     const newPost = await Post.create({
       title,
+      workType,
       campaignId: Number(campaignId),
       topicStatus: '주제 승인 대기',
     });
