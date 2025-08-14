@@ -122,11 +122,23 @@ router.post('/', async (req, res) => {
 
     console.log('Parsed values:', { name, client, userId, managerId });
 
-    if (!name || !userId || !managerId) {
-      console.log('Missing required fields:', { name: !!name, userId: !!userId, managerId: !!managerId });
+    if (!name || !userId || !managerId || isNaN(userId) || isNaN(managerId)) {
+      console.log('Missing required fields:', { 
+        name: !!name, 
+        client: !!client,
+        userId: !!userId, 
+        managerId: !!managerId,
+        userIdValid: !isNaN(userId),
+        managerIdValid: !isNaN(managerId)
+      });
       return res.status(400).json({ 
-        message: '필수 필드가 누락되었습니다.',
-        details: { name: !!name, userId: !!userId, managerId: !!managerId }
+        message: '필수 필드가 누락되었거나 잘못되었습니다.',
+        details: { 
+          name: !!name, 
+          client: !!client,
+          userId: !!userId && !isNaN(userId), 
+          managerId: !!managerId && !isNaN(managerId)
+        }
       });
     }
 
