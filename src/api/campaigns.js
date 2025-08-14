@@ -60,7 +60,10 @@ router.get('/', async (req, res) => {
     console.log('Campaign query - viewerId:', viewerId, 'viewerRole:', viewerRole, 'viewerCompany:', viewerCompany);
 
     let whereClause;
-    if (viewerRole === '대행사 어드민') {
+    if (viewerRole === '슈퍼 어드민') {
+      // 슈퍼 어드민은 모든 캠페인 조회 가능 (기존과 동일)
+      whereClause = undefined;
+    } else if (viewerRole === '대행사 어드민') {
       if (!viewerCompany) {
         // company가 없는 대행사 어드민은 자신이 담당자인 캠페인만 조회
         whereClause = { managerId: viewerId };
@@ -74,9 +77,10 @@ router.get('/', async (req, res) => {
         };
       }
     } else if (viewerRole === '클라이언트') {
+      // 클라이언트는 자신의 캠페인만 조회 (userId 기준)
       whereClause = { userId: viewerId };
       console.log('Client where clause:', whereClause);
-    } // 슈퍼 어드민은 where 없음
+    }
     
     console.log('Final where clause:', whereClause);
 
