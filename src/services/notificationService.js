@@ -45,17 +45,29 @@ class NotificationService {
    * 새 업무 등록 알림
    */
   static async notifyTaskCreated(post, creatorId) {
+    console.log('📋 notifyTaskCreated 호출됨:', { postId: post.id, campaignId: post.campaignId, creatorId });
     try {
       // 캠페인 정보와 매니저 정보 가져오기
       const campaign = await Campaign.findByPk(post.campaignId, {
         include: [{ model: User, as: 'User' }] // 매니저 정보
       });
 
-      if (!campaign || !campaign.User) return;
+      console.log('캠페인 정보 조회:', { 
+        campaignId: campaign?.id, 
+        managerId: campaign?.managerId, 
+        hasManager: !!campaign?.User 
+      });
+
+      if (!campaign || !campaign.User) {
+        console.log('❌ 캠페인 또는 매니저 정보 없음');
+        return;
+      }
 
       // 매니저에게 알림
       if (campaign.managerId !== creatorId) { // 자신이 등록한 경우는 제외
-        await this.createNotification({
+        console.log('✅ 매니저에게 알림 발송:', { managerId: campaign.managerId, creatorId });
+        
+        const notification = await this.createNotification({
           userId: campaign.managerId,
           title: '새로운 업무가 등록되었습니다',
           message: `"${campaign.name}" 캠페인에 새로운 ${post.workType} 업무가 등록되었습니다: ${post.title}`,
@@ -69,9 +81,13 @@ class NotificationService {
           createdBy: creatorId,
           priority: 'medium'
         });
+        
+        console.log('📨 업무 등록 알림 생성 완료:', notification.id);
+      } else {
+        console.log('⏭️ 자신이 등록한 업무라서 알림 건너뜀');
       }
     } catch (error) {
-      console.error('업무 등록 알림 실패:', error);
+      console.error('❌ 업무 등록 알림 실패:', error);
     }
   }
 
@@ -79,18 +95,30 @@ class NotificationService {
    * 업무 승인/반려 알림
    */
   static async notifyTaskStatusChanged(post, newStatus, reviewerId) {
+    console.log('⚡ notifyTaskStatusChanged 호출됨:', { postId: post.id, newStatus, reviewerId });
     try {
       const campaign = await Campaign.findByPk(post.campaignId, {
         include: [{ model: User, as: 'Client' }] // 클라이언트 정보
       });
 
-      if (!campaign || !campaign.Client) return;
+      console.log('캠페인 정보 조회:', { 
+        campaignId: campaign?.id, 
+        userId: campaign?.userId, 
+        hasClient: !!campaign?.Client 
+      });
+
+      if (!campaign || !campaign.Client) {
+        console.log('❌ 캠페인 또는 클라이언트 정보 없음');
+        return;
+      }
 
       const isApproved = newStatus.includes('승인');
       const isRejected = newStatus.includes('반려');
 
       if (campaign.userId !== reviewerId) { // 자신이 승인한 경우는 제외
-        await this.createNotification({
+        console.log('✅ 클라이언트에게 알림 발송:', { userId: campaign.userId, reviewerId });
+        
+        const notification = await this.createNotification({
           userId: campaign.userId,
           title: `업무가 ${isApproved ? '승인' : '반려'}되었습니다`,
           message: `"${campaign.name}" 캠페인의 "${post.title}" 업무가 ${newStatus}되었습니다.`,
@@ -104,9 +132,13 @@ class NotificationService {
           createdBy: reviewerId,
           priority: isRejected ? 'high' : 'medium'
         });
+        
+        console.log('📨 업무 상태 변경 알림 생성 완료:', notification.id);
+      } else {
+        console.log('⏭️ 자신이 승인한 업무라서 알림 건너뜀');
       }
     } catch (error) {
-      console.error('업무 상태 변경 알림 실패:', error);
+      console.error('❌ 업무 상태 변경 알림 실패:', error);
     }
   }
 
