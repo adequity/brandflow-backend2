@@ -4,6 +4,7 @@ import User from './user.js';
 import Campaign from './campaign.js';
 import Post from './post.js';
 import Notification from './notification.js';
+import PurchaseRequestModel from './purchaseRequest.js';
 
 const db = {};
 db.sequelize = sequelize;
@@ -11,6 +12,10 @@ db.User = User;
 db.Campaign = Campaign;
 db.Post = Post;
 db.Notification = Notification;
+
+// PurchaseRequest 모델 초기화
+const PurchaseRequest = PurchaseRequestModel(sequelize);
+db.PurchaseRequest = PurchaseRequest;
 
 /** ====== Associations (프론트 코드와 alias 맞춤) ====== **/
 
@@ -43,5 +48,22 @@ Notification.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 User.hasMany(Notification, { foreignKey: 'createdBy', as: 'createdNotifications', onDelete: 'SET NULL' });
 Notification.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
 
-export { User, Campaign, Post, Notification };
+// PurchaseRequest 관계 설정
+// 요청자 (직원)
+User.hasMany(PurchaseRequest, { foreignKey: 'requesterId', as: 'purchaseRequests' });
+PurchaseRequest.belongsTo(User, { foreignKey: 'requesterId', as: 'requester' });
+
+// 승인자 (대행사 어드민)
+User.hasMany(PurchaseRequest, { foreignKey: 'approverId', as: 'approvedRequests' });
+PurchaseRequest.belongsTo(User, { foreignKey: 'approverId', as: 'approver' });
+
+// 캠페인 연결
+Campaign.hasMany(PurchaseRequest, { foreignKey: 'campaignId', as: 'purchaseRequests' });
+PurchaseRequest.belongsTo(Campaign, { foreignKey: 'campaignId', as: 'campaign' });
+
+// 포스트 연결
+Post.hasMany(PurchaseRequest, { foreignKey: 'postId', as: 'purchaseRequests' });
+PurchaseRequest.belongsTo(Post, { foreignKey: 'postId', as: 'post' });
+
+export { User, Campaign, Post, Notification, PurchaseRequest };
 export default db;
