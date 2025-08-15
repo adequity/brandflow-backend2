@@ -30,8 +30,10 @@ async function getViewer(req) {
 router.get('/', async (req, res) => {
   try {
     const { viewerId } = await getViewer(req);
+    console.log('알림 목록 요청 - viewerId:', viewerId);
     
     if (!viewerId || isNaN(viewerId)) {
+      console.log('인증 실패 - viewerId:', viewerId);
       return res.status(401).json({ message: '인증이 필요합니다.' });
     }
 
@@ -39,10 +41,18 @@ router.get('/', async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const unreadOnly = req.query.unreadOnly === 'true';
 
+    console.log('알림 조회 파라미터:', { viewerId, page, limit, unreadOnly });
+
     const result = await NotificationService.getUserNotifications(viewerId, {
       page,
       limit,
       unreadOnly
+    });
+
+    console.log('알림 조회 결과:', { 
+      count: result.notifications.length, 
+      unreadCount: result.unreadCount,
+      totalPages: result.totalPages 
     });
 
     res.json(result);
@@ -125,9 +135,9 @@ router.put('/read-all', async (req, res) => {
 
 /**
  * POST /api/notifications/test
- * 테스트용 알림 생성 (개발 환경에서만)
+ * 테스트용 알림 생성 (임시로 모든 환경에서 활성화)
  */
-if (process.env.NODE_ENV !== 'production') {
+// if (process.env.NODE_ENV !== 'production') {
   router.post('/test', async (req, res) => {
     try {
       const { viewerId } = await getViewer(req);
@@ -158,6 +168,6 @@ if (process.env.NODE_ENV !== 'production') {
       res.status(500).json({ message: '서버 에러가 발생했습니다.' });
     }
   });
-}
+// }
 
 export default router;
