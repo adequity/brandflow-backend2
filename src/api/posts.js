@@ -1,5 +1,5 @@
 import express from 'express';
-import { Post, User } from '../models/index.js';
+import { Post, User, Campaign } from '../models/index.js';
 import NotificationService from '../services/notificationService.js';
 
 const router = express.Router();
@@ -30,11 +30,47 @@ router.put('/:id', async (req, res) => {
     const { title, outline, publishedUrl, topicStatus, outlineStatus, images } = req.body;
 
     try {
-        const { viewerId } = await getViewer(req);
+        const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
         
-        const post = await Post.findByPk(id);
+        const post = await Post.findByPk(id, {
+            include: [{
+                model: Campaign,
+                as: 'Campaign',
+                include: [{ model: User, as: 'User' }]
+            }]
+        });
         if (!post) {
             return res.status(404).json({ message: '포스트를 찾을 수 없습니다.' });
+        }
+
+        // 권한 확인
+        let hasPermission = false;
+        
+        if (viewerRole === '슈퍼 어드민') {
+            hasPermission = true;
+        } else if (viewerRole === '대행사 어드민') {
+            // 대행사 어드민은 같은 회사의 캠페인 업무 수정 가능
+            const campaignUser = post.Campaign?.User;
+            if (viewerCompany && 
+                campaignUser?.company === viewerCompany && 
+                campaignUser.role !== '슈퍼 어드민') {
+                hasPermission = true;
+            }
+        } else if (viewerRole === '직원') {
+            // 직원은 같은 회사의 캠페인 업무 수정 가능
+            const campaignUser = post.Campaign?.User;
+            if (viewerCompany && campaignUser?.company === viewerCompany) {
+                hasPermission = true;
+            }
+        } else if (viewerRole === '클라이언트') {
+            // 클라이언트는 본인의 캠페인만 수정 가능
+            if (post.Campaign?.userId === viewerId) {
+                hasPermission = true;
+            }
+        }
+        
+        if (!hasPermission) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
         }
 
         // 이전 상태 저장 (알림용)
@@ -91,9 +127,47 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        const post = await Post.findByPk(id);
+        const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
+        
+        const post = await Post.findByPk(id, {
+            include: [{
+                model: Campaign,
+                as: 'Campaign',
+                include: [{ model: User, as: 'User' }]
+            }]
+        });
         if (!post) {
             return res.status(404).json({ message: '포스트를 찾을 수 없습니다.' });
+        }
+
+        // 권한 확인
+        let hasPermission = false;
+        
+        if (viewerRole === '슈퍼 어드민') {
+            hasPermission = true;
+        } else if (viewerRole === '대행사 어드민') {
+            // 대행사 어드민은 같은 회사의 캠페인 업무 삭제 가능
+            const campaignUser = post.Campaign?.User;
+            if (viewerCompany && 
+                campaignUser?.company === viewerCompany && 
+                campaignUser.role !== '슈퍼 어드민') {
+                hasPermission = true;
+            }
+        } else if (viewerRole === '직원') {
+            // 직원은 같은 회사의 캠페인 업무 삭제 가능
+            const campaignUser = post.Campaign?.User;
+            if (viewerCompany && campaignUser?.company === viewerCompany) {
+                hasPermission = true;
+            }
+        } else if (viewerRole === '클라이언트') {
+            // 클라이언트는 본인의 캠페인만 삭제 가능
+            if (post.Campaign?.userId === viewerId) {
+                hasPermission = true;
+            }
+        }
+        
+        if (!hasPermission) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
         }
 
         await post.destroy();
@@ -110,9 +184,47 @@ router.put('/:id/status', async (req, res) => {
     const { topicStatus, outlineStatus, rejectReason } = req.body;
 
     try {
-        const post = await Post.findByPk(id);
+        const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
+        
+        const post = await Post.findByPk(id, {
+            include: [{
+                model: Campaign,
+                as: 'Campaign',
+                include: [{ model: User, as: 'User' }]
+            }]
+        });
         if (!post) {
             return res.status(404).json({ message: '포스트를 찾을 수 없습니다.' });
+        }
+
+        // 권한 확인
+        let hasPermission = false;
+        
+        if (viewerRole === '슈퍼 어드민') {
+            hasPermission = true;
+        } else if (viewerRole === '대행사 어드민') {
+            // 대행사 어드민은 같은 회사의 캠페인 업무 상태 변경 가능
+            const campaignUser = post.Campaign?.User;
+            if (viewerCompany && 
+                campaignUser?.company === viewerCompany && 
+                campaignUser.role !== '슈퍼 어드민') {
+                hasPermission = true;
+            }
+        } else if (viewerRole === '직원') {
+            // 직원은 같은 회사의 캠페인 업무 상태 변경 가능
+            const campaignUser = post.Campaign?.User;
+            if (viewerCompany && campaignUser?.company === viewerCompany) {
+                hasPermission = true;
+            }
+        } else if (viewerRole === '클라이언트') {
+            // 클라이언트는 본인의 캠페인만 상태 변경 가능
+            if (post.Campaign?.userId === viewerId) {
+                hasPermission = true;
+            }
+        }
+        
+        if (!hasPermission) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
         }
 
         if (topicStatus) post.topicStatus = topicStatus;

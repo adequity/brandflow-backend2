@@ -102,9 +102,9 @@ router.post('/', async (req, res) => {
 
     const { name, email, password, role, company, contact } = req.body;
 
-    // 대행사 어드민은 클라이언트만 생성 가능
-    if (viewerRole === '대행사 어드민' && role !== '클라이언트') {
-      return res.status(403).json({ message: '대행사 어드민은 클라이언트 계정만 생성할 수 있습니다.' });
+    // 대행사 어드민은 클라이언트와 직원 생성 가능 (슈퍼 어드민 제외)
+    if (viewerRole === '대행사 어드민' && role === '슈퍼 어드민') {
+      return res.status(403).json({ message: '대행사 어드민은 슈퍼 어드민 계정을 생성할 수 없습니다.' });
     }
 
     // 필수 필드 검증
@@ -122,7 +122,7 @@ router.post('/', async (req, res) => {
     const bcrypt = await import('bcrypt');
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 대행사 어드민이 생성하는 클라이언트는 자동으로 같은 회사 배정
+    // 대행사 어드민이 생성하는 사용자는 자동으로 같은 회사 배정
     let finalCompany = company;
     if (viewerRole === '대행사 어드민') {
       const viewer = await User.findByPk(viewerId, { attributes: ['company'] });
@@ -160,15 +160,35 @@ router.put('/:id', async (req, res) => {
     const { viewerId, viewerRole } = await getViewer(req);
     const { name, email, role, company, contact } = req.body;
 
+    // 수정 대상 사용자 정보 확인
+    const targetUser = await User.findByPk(targetId);
+    if (!targetUser) {
+      return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
+    }
+
     // 권한 확인
-    if (viewerRole !== '슈퍼 어드민' && viewerId !== targetId) {
+    let hasPermission = false;
+    
+    if (viewerRole === '슈퍼 어드민') {
+      hasPermission = true;
+    } else if (viewerId === targetId) {
+      hasPermission = true; // 본인 수정
+    } else if (viewerRole === '대행사 어드민') {
+      // 대행사 어드민은 같은 회사의 직원/클라이언트 수정 가능 (슈퍼 어드민 제외)
+      const viewer = await User.findByPk(viewerId, { attributes: ['company'] });
+      if (viewer?.company && 
+          targetUser.company === viewer.company && 
+          targetUser.role !== '슈퍼 어드민') {
+        hasPermission = true;
+      }
+    }
+    
+    if (!hasPermission) {
       return res.status(403).json({ message: '권한이 없습니다.' });
     }
 
-    const user = await User.findByPk(targetId);
-    if (!user) {
-      return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
-    }
+    // targetUser를 user 변수로 재사용
+    const user = targetUser;
 
     // 이메일 중복 확인 (다른 사용자와)
     if (email && email !== user.email) {
@@ -204,9 +224,29 @@ router.delete('/:id', async (req, res) => {
     const targetId = Number(req.params.id);
     const { viewerId, viewerRole } = await getViewer(req);
 
-    // 권한 확인: 슈퍼 어드민만 삭제 가능
-    if (viewerRole !== '슈퍼 어드민') {
-      return res.status(403).json({ message: '권한이 없습니다. 슈퍼 어드민만 사용자를 삭제할 수 있습니다.' });
+    // 삭제 대상 사용자 정보 확인
+    const targetUser = await User.findByPk(targetId);
+    if (!targetUser) {
+      return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
+    }
+
+    // 권한 확인
+    let hasPermission = false;
+    
+    if (viewerRole === '슈퍼 어드민') {
+      hasPermission = true;
+    } else if (viewerRole === '대행사 어드민') {
+      // 대행사 어드민은 같은 회사의 직원/클라이언트 삭제 가능 (슈퍼 어드민 제외)
+      const viewer = await User.findByPk(viewerId, { attributes: ['company'] });
+      if (viewer?.company && 
+          targetUser.company === viewer.company && 
+          targetUser.role !== '슈퍼 어드민') {
+        hasPermission = true;
+      }
+    }
+    
+    if (!hasPermission) {
+      return res.status(403).json({ message: '권한이 없습니다.' });
     }
 
     // 자기 자신 삭제 방지
@@ -214,10 +254,8 @@ router.delete('/:id', async (req, res) => {
       return res.status(400).json({ message: '자기 자신은 삭제할 수 없습니다.' });
     }
 
-    const user = await User.findByPk(targetId);
-    if (!user) {
-      return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
-    }
+    // targetUser를 user 변수로 재사용
+    const user = targetUser;
 
     await user.destroy();
     res.json({ message: '사용자가 삭제되었습니다.' });
