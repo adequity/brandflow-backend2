@@ -1,7 +1,27 @@
 import express from 'express';
-import { Post } from '../models/index.js';
+import { Post, User } from '../models/index.js';
+import NotificationService from '../services/notificationService.js';
 
 const router = express.Router();
+
+/**
+ * 호출자 정보 파싱
+ */
+async function getViewer(req) {
+  const rawViewerId = req.query.viewerId || req.query.adminId;
+  const rawViewerRole = req.query.viewerRole || req.query.adminRole || '';
+  
+  const viewerId = Number(Array.isArray(rawViewerId) ? rawViewerId[0] : rawViewerId);
+  const viewerRole = String(Array.isArray(rawViewerRole) ? rawViewerRole[0] : rawViewerRole).trim();
+  
+  let viewerCompany = null;
+
+  if (viewerId && !isNaN(viewerId)) {
+    const v = await User.findByPk(viewerId, { attributes: ['id', 'company', 'role'] });
+    viewerCompany = v?.company ?? null;
+  }
+  return { viewerId, viewerRole, viewerCompany };
+}
 
 // PUT /api/posts/:id - 포스트 정보 수정 (주제, 목차, 링크 등)
 router.put('/:id', async (req, res) => {
@@ -10,10 +30,18 @@ router.put('/:id', async (req, res) => {
     const { title, outline, publishedUrl, topicStatus, outlineStatus, images } = req.body;
 
     try {
+        const { viewerId } = await getViewer(req);
+        
         const post = await Post.findByPk(id);
         if (!post) {
             return res.status(404).json({ message: '포스트를 찾을 수 없습니다.' });
         }
+
+        // 이전 상태 저장 (알림용)
+        const previousTopicStatus = post.topicStatus;
+        const previousOutlineStatus = post.outlineStatus;
+        const previousOutline = post.outline;
+        const previousPublishedUrl = post.publishedUrl;
 
         // 전달된 필드만 선택적으로 업데이트합니다.
         if (title !== undefined) post.title = title;
@@ -24,6 +52,30 @@ router.put('/:id', async (req, res) => {
         if (images !== undefined) post.images = images;
 
         await post.save();
+
+        // 알림 발송 로직
+        if (viewerId) {
+            // 업무 상태 변경 알림
+            if (topicStatus && topicStatus !== previousTopicStatus) {
+                await NotificationService.notifyTaskStatusChanged(post, topicStatus, viewerId);
+            }
+
+            // 세부사항 상태 변경 알림  
+            if (outlineStatus && outlineStatus !== previousOutlineStatus) {
+                await NotificationService.notifyOutlineStatusChanged(post, outlineStatus, viewerId);
+            }
+
+            // 세부사항 제출 알림 (새로 outline이 추가된 경우)
+            if (outline && !previousOutline) {
+                await NotificationService.notifyOutlineSubmitted(post, viewerId);
+            }
+
+            // 결과물 제출 알림 (새로 publishedUrl이 추가된 경우)
+            if (publishedUrl && !previousPublishedUrl) {
+                await NotificationService.notifyResultSubmitted(post, viewerId);
+            }
+        }
+
         res.status(200).json(post);
     } catch (error) {
         console.error(`포스트(ID: ${id}) 수정 실패:`, error);

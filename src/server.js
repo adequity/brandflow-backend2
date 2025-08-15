@@ -11,6 +11,7 @@ import authRoutes from './api/auth.js';
 import userRoutes from './api/users.js';
 import campaignRoutes from './api/campaigns.js';
 import postRoutes from './api/posts.js';
+import notificationRoutes from './api/notifications.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -30,6 +31,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/posts', postRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.get('/', (req, res) => {
   res.send('BrandFlow 백엔드 서버가 정상적으로 동작하고 있습니다.');

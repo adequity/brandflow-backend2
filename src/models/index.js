@@ -3,12 +3,14 @@ import sequelize from '../config/db.js';
 import User from './user.js';
 import Campaign from './campaign.js';
 import Post from './post.js';
+import Notification from './notification.js';
 
 const db = {};
 db.sequelize = sequelize;
 db.User = User;
 db.Campaign = Campaign;
 db.Post = Post;
+db.Notification = Notification;
 
 /** ====== Associations (프론트 코드와 alias 맞춤) ====== **/
 
@@ -33,5 +35,13 @@ Campaign.hasMany(Post, {
 });
 Post.belongsTo(Campaign, { foreignKey: 'campaignId' });
 
-export { User, Campaign, Post };
+// User — Notification 관계
+User.hasMany(Notification, { foreignKey: 'userId', as: 'notifications', onDelete: 'CASCADE' });
+Notification.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+// 알림 생성자와의 관계 (optional)
+User.hasMany(Notification, { foreignKey: 'createdBy', as: 'createdNotifications', onDelete: 'SET NULL' });
+Notification.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
+
+export { User, Campaign, Post, Notification };
 export default db;

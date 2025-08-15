@@ -2,6 +2,7 @@
 import express from 'express';
 import { Campaign, User, Post } from '../models/index.js';
 import { Op } from 'sequelize';
+import NotificationService from '../services/notificationService.js';
 
 const router = express.Router();
 
@@ -193,6 +194,10 @@ router.post('/', async (req, res) => {
 
     const created = await Campaign.create({ name, client, userId, managerId });
     const full = await Campaign.findByPk(created.id, { include: commonInclude });
+    
+    // 캠페인 생성 알림 발송
+    await NotificationService.notifyCampaignCreated(full, viewerId);
+    
     res.status(201).json(full);
   } catch (error) {
     console.error('캠페인 생성 실패:', error);
@@ -257,6 +262,9 @@ router.post('/:campaignId/posts', async (req, res) => {
       campaignId: Number(campaignId),
       topicStatus: '주제 승인 대기',
     });
+
+    // 새 업무 등록 알림 발송
+    await NotificationService.notifyTaskCreated(newPost, viewerId);
 
     res.status(201).json(newPost);
   } catch (error) {
