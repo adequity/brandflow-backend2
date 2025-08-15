@@ -195,8 +195,12 @@ router.post('/', async (req, res) => {
     const created = await Campaign.create({ name, client, userId, managerId });
     const full = await Campaign.findByPk(created.id, { include: commonInclude });
     
-    // 캠페인 생성 알림 발송
-    await NotificationService.notifyCampaignCreated(full, viewerId);
+    // 캠페인 생성 알림 발송 (실패해도 캠페인 생성은 성공으로 처리)
+    try {
+      await NotificationService.notifyCampaignCreated(full, viewerId);
+    } catch (notificationError) {
+      console.error('캠페인 생성 알림 발송 실패 (캠페인은 정상 생성됨):', notificationError);
+    }
     
     res.status(201).json(full);
   } catch (error) {
@@ -263,8 +267,12 @@ router.post('/:campaignId/posts', async (req, res) => {
       topicStatus: '주제 승인 대기',
     });
 
-    // 새 업무 등록 알림 발송
-    await NotificationService.notifyTaskCreated(newPost, viewerId);
+    // 새 업무 등록 알림 발송 (실패해도 업무 등록은 성공으로 처리)
+    try {
+      await NotificationService.notifyTaskCreated(newPost, viewerId);
+    } catch (notificationError) {
+      console.error('업무 등록 알림 발송 실패 (업무는 정상 등록됨):', notificationError);
+    }
 
     res.status(201).json(newPost);
   } catch (error) {

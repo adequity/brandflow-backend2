@@ -53,26 +53,30 @@ router.put('/:id', async (req, res) => {
 
         await post.save();
 
-        // 알림 발송 로직
+        // 알림 발송 로직 (실패해도 업데이트는 성공으로 처리)
         if (viewerId) {
-            // 업무 상태 변경 알림
-            if (topicStatus && topicStatus !== previousTopicStatus) {
-                await NotificationService.notifyTaskStatusChanged(post, topicStatus, viewerId);
-            }
+            try {
+                // 업무 상태 변경 알림
+                if (topicStatus && topicStatus !== previousTopicStatus) {
+                    await NotificationService.notifyTaskStatusChanged(post, topicStatus, viewerId);
+                }
 
-            // 세부사항 상태 변경 알림  
-            if (outlineStatus && outlineStatus !== previousOutlineStatus) {
-                await NotificationService.notifyOutlineStatusChanged(post, outlineStatus, viewerId);
-            }
+                // 세부사항 상태 변경 알림  
+                if (outlineStatus && outlineStatus !== previousOutlineStatus) {
+                    await NotificationService.notifyOutlineStatusChanged(post, outlineStatus, viewerId);
+                }
 
-            // 세부사항 제출 알림 (새로 outline이 추가된 경우)
-            if (outline && !previousOutline) {
-                await NotificationService.notifyOutlineSubmitted(post, viewerId);
-            }
+                // 세부사항 제출 알림 (새로 outline이 추가된 경우)
+                if (outline && !previousOutline) {
+                    await NotificationService.notifyOutlineSubmitted(post, viewerId);
+                }
 
-            // 결과물 제출 알림 (새로 publishedUrl이 추가된 경우)
-            if (publishedUrl && !previousPublishedUrl) {
-                await NotificationService.notifyResultSubmitted(post, viewerId);
+                // 결과물 제출 알림 (새로 publishedUrl이 추가된 경우)
+                if (publishedUrl && !previousPublishedUrl) {
+                    await NotificationService.notifyResultSubmitted(post, viewerId);
+                }
+            } catch (notificationError) {
+                console.error('포스트 업데이트 알림 발송 실패 (포스트는 정상 업데이트됨):', notificationError);
             }
         }
 
