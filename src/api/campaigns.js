@@ -180,7 +180,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    const { viewerRole, viewerCompany } = await getViewer(req);
+    const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
     if (viewerRole === '대행사 어드민' && viewerCompany) {
       const [manager, clientUser] = await Promise.all([
         User.findByPk(managerId, { attributes: ['id', 'company'] }),
