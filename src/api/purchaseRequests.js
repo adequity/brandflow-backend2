@@ -2,6 +2,8 @@
 import express from 'express';
 import { PurchaseRequest, User, Campaign, Post } from '../models/index.js';
 import { Op } from 'sequelize';
+import DocumentService from '../services/documentService.js';
+import fs from 'fs/promises';
 
 const router = express.Router();
 
@@ -330,6 +332,89 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
     console.error('구매요청 삭제 실패:', error);
     res.status(500).json({ message: '서버 에러가 발생했습니다.' });
+  }
+});
+
+/**
+ * POST /api/purchase-requests/:id/generate-documents - 문서 생성 (PDF + JPG)
+ */
+router.post('/:id/generate-documents', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type = 'transaction' } = req.body; // 'transaction' 또는 'quote'
+    const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
+    
+    // 구매요청 조회
+    const request = await PurchaseRequest.findByPk(id, {
+      include: [
+        { model: User, as: 'requester', attributes: ['id', 'name', 'email', 'company'] },
+        { model: User, as: 'approver', attributes: ['id', 'name', 'email'] },
+        { model: Campaign, as: 'campaign', attributes: ['id', 'name'] },
+        { model: Post, as: 'post', attributes: ['id', 'title'] }
+      ]
+    });
+    
+    if (!request) {
+      return res.status(404).json({ message: '구매요청을 찾을 수 없습니다.' });
+    }
+    
+    // 권한 확인
+    let hasPermission = false;
+    
+    if (viewerRole === '슈퍼 어드민') {
+      hasPermission = true;
+    } else if (viewerRole === '대행사 어드민') {
+      if (viewerCompany && request.requester?.company === viewerCompany) {
+        hasPermission = true;
+      }
+    } else if (viewerRole === '직원') {
+      if (request.requesterId === viewerId) {
+        hasPermission = true;
+      }
+    }
+    
+    if (!hasPermission) {
+      return res.status(403).json({ message: '권한이 없습니다.' });
+    }
+    
+    // 문서 생성
+    const documents = await DocumentService.generateDocuments(
+      request, 
+      request.requester, 
+      request.approver, 
+      type
+    );
+    
+    // 파일 읽기
+    const pdfBuffer = await fs.readFile(documents.pdf);
+    const jpgBuffer = await fs.readFile(documents.jpg);
+    
+    // Base64 인코딩
+    const pdfBase64 = pdfBuffer.toString('base64');
+    const jpgBase64 = jpgBuffer.toString('base64');
+    
+    // 임시 파일 정리
+    await DocumentService.cleanupFiles([documents.pdf, documents.jpg]);
+    
+    res.json({
+      success: true,
+      files: {
+        pdf: {
+          filename: `${documents.filename}.pdf`,
+          data: pdfBase64,
+          mimeType: 'application/pdf'
+        },
+        jpg: {
+          filename: `${documents.filename}.jpg`,
+          data: jpgBase64,
+          mimeType: 'image/jpeg'
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('문서 생성 실패:', error);
+    res.status(500).json({ message: '문서 생성에 실패했습니다.' });
   }
 });
 
