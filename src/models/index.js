@@ -5,6 +5,8 @@ import Campaign from './campaign.js';
 import Post from './post.js';
 import Notification from './notification.js';
 import PurchaseRequestModel from './purchaseRequest.js';
+import ProductModel from './product.js';
+import SaleModel from './sale.js';
 
 const db = {};
 db.sequelize = sequelize;
@@ -13,9 +15,14 @@ db.Campaign = Campaign;
 db.Post = Post;
 db.Notification = Notification;
 
-// PurchaseRequest 모델 초기화
+// 모델 초기화
 const PurchaseRequest = PurchaseRequestModel(sequelize);
+const Product = ProductModel(sequelize);
+const Sale = SaleModel(sequelize);
+
 db.PurchaseRequest = PurchaseRequest;
+db.Product = Product;
+db.Sale = Sale;
 
 /** ====== Associations (프론트 코드와 alias 맞춤) ====== **/
 
@@ -65,5 +72,27 @@ PurchaseRequest.belongsTo(Campaign, { foreignKey: 'campaignId', as: 'campaign' }
 Post.hasMany(PurchaseRequest, { foreignKey: 'postId', as: 'purchaseRequests' });
 PurchaseRequest.belongsTo(Post, { foreignKey: 'postId', as: 'post' });
 
-export { User, Campaign, Post, Notification, PurchaseRequest };
+// Product 관계 설정
+// 상품 생성자 (본사 관리자)
+User.hasMany(Product, { foreignKey: 'createdBy', as: 'createdProducts' });
+Product.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
+
+// Sale 관계 설정
+// 영업 담당자 (직원)
+User.hasMany(Sale, { foreignKey: 'salesPersonId', as: 'sales' });
+Sale.belongsTo(User, { foreignKey: 'salesPersonId', as: 'salesperson' });
+
+// 검토자 (본사 관리자)
+User.hasMany(Sale, { foreignKey: 'reviewedBy', as: 'reviewedSales' });
+Sale.belongsTo(User, { foreignKey: 'reviewedBy', as: 'reviewer' });
+
+// 상품-매출 관계
+Product.hasMany(Sale, { foreignKey: 'productId', as: 'sales' });
+Sale.belongsTo(Product, { foreignKey: 'productId', as: 'product' });
+
+// 캠페인-매출 관계 (선택적)
+Campaign.hasMany(Sale, { foreignKey: 'campaignId', as: 'sales' });
+Sale.belongsTo(Campaign, { foreignKey: 'campaignId', as: 'campaign' });
+
+export { User, Campaign, Post, Notification, PurchaseRequest, Product, Sale };
 export default db;
