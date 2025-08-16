@@ -278,7 +278,7 @@ class DocumentService {
   }
 
   // 견적서 HTML 템플릿
-  generateQuoteHTML(purchaseRequest, approver, requester, marginRate = 0.15) {
+  generateQuoteHTML(purchaseRequest, approver, requester) {
     const formatAmount = (amount) => {
       return new Intl.NumberFormat('ko-KR', {
         style: 'currency',
@@ -294,11 +294,7 @@ class DocumentService {
       });
     };
 
-    const baseAmount = parseFloat(purchaseRequest.amount);
-    const marginAmount = baseAmount * marginRate;
-    const totalAmount = baseAmount + marginAmount;
-    const vatAmount = totalAmount * 0.1;
-    const finalAmount = totalAmount + vatAmount;
+    const totalAmount = parseFloat(purchaseRequest.amount);
 
     return `
     <!DOCTYPE html>
@@ -487,27 +483,14 @@ class DocumentService {
                             <tr>
                                 <td>
                                     <strong>${purchaseRequest.title}</strong>
-                                    ${purchaseRequest.description ? `<br><small style="color: #6b7280;">${purchaseRequest.description.substring(0, 100)}${purchaseRequest.description.length > 100 ? '...' : ''}</small>` : ''}
+                                    ${purchaseRequest.description ? `<br><small style="color: #6b7280;">${purchaseRequest.description.substring(0, 150)}${purchaseRequest.description.length > 150 ? '...' : ''}</small>` : ''}
                                 </td>
                                 <td>${purchaseRequest.resourceType}</td>
-                                <td class="amount-right">${formatAmount(baseAmount)}</td>
-                            </tr>
-                            <tr>
-                                <td>대행 수수료 (${(marginRate * 100).toFixed(0)}%)</td>
-                                <td>서비스</td>
-                                <td class="amount-right">${formatAmount(marginAmount)}</td>
-                            </tr>
-                            <tr class="total-row">
-                                <td colspan="2"><strong>소계</strong></td>
-                                <td class="amount-right"><strong>${formatAmount(totalAmount)}</strong></td>
-                            </tr>
-                            <tr>
-                                <td colspan="2">부가가치세 (10%)</td>
-                                <td class="amount-right">${formatAmount(vatAmount)}</td>
+                                <td class="amount-right">${formatAmount(totalAmount)}</td>
                             </tr>
                             <tr class="final-total">
-                                <td colspan="2"><strong>총 금액</strong></td>
-                                <td class="amount-right"><strong>${formatAmount(finalAmount)}</strong></td>
+                                <td colspan="2"><strong>총 견적 금액</strong></td>
+                                <td class="amount-right"><strong>${formatAmount(totalAmount)}</strong></td>
                             </tr>
                         </tbody>
                     </table>
@@ -524,14 +507,14 @@ class DocumentService {
                 </div>
                 ` : ''}
 
-                <!-- 결제 조건 -->
+                <!-- 견적 상세 -->
                 <div class="section">
-                    <div class="section-title">📄 결제 조건</div>
+                    <div class="section-title">📄 견적 상세</div>
                     <div class="note-box">
-                        <strong>결제 조건:</strong> 선금 50%, 완료 후 50%<br>
+                        <strong>견적 유효기간:</strong> 견적일로부터 30일<br>
+                        <strong>작업 기간:</strong> ${purchaseRequest.dueDate ? `${formatDate(purchaseRequest.dueDate)}까지` : '협의 후 결정'}<br>
                         <strong>결제 방법:</strong> 계좌이체 또는 세금계산서<br>
-                        <strong>작업 기간:</strong> 계약 후 ${purchaseRequest.dueDate ? `${formatDate(purchaseRequest.dueDate)}까지` : '협의'}<br>
-                        <strong>기타:</strong> 본 견적에는 부가가치세가 포함되어 있습니다.
+                        <strong>참고사항:</strong> 상세한 작업 내용 및 조건은 담당자와 협의 바랍니다.
                     </div>
                 </div>
             </div>
