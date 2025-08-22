@@ -1,12 +1,14 @@
 // src/models/index.js
 import sequelize from '../config/db.js';
 import User from './user.js';
-import Campaign from './campaign.js';
+import Campaign from './Campaign.js';
 import Post from './post.js';
 import Notification from './notification.js';
 import PurchaseRequestModel from './purchaseRequest.js';
 import ProductModel from './product.js';
 import SaleModel from './sale.js';
+import SystemSettingModel from './systemSetting.js';
+import MonthlyIncentiveModel from './monthlyIncentive.js';
 
 const db = {};
 db.sequelize = sequelize;
@@ -19,10 +21,14 @@ db.Notification = Notification;
 const PurchaseRequest = PurchaseRequestModel(sequelize);
 const Product = ProductModel(sequelize);
 const Sale = SaleModel(sequelize);
+const SystemSetting = SystemSettingModel(sequelize);
+const MonthlyIncentive = MonthlyIncentiveModel(sequelize);
 
 db.PurchaseRequest = PurchaseRequest;
 db.Product = Product;
 db.Sale = Sale;
+db.SystemSetting = SystemSetting;
+db.MonthlyIncentive = MonthlyIncentive;
 
 /** ====== Associations (프론트 코드와 alias 맞춤) ====== **/
 
@@ -94,5 +100,27 @@ Sale.belongsTo(Product, { foreignKey: 'productId', as: 'product' });
 Campaign.hasMany(Sale, { foreignKey: 'campaignId', as: 'sales' });
 Sale.belongsTo(Campaign, { foreignKey: 'campaignId', as: 'campaign' });
 
-export { User, Campaign, Post, Notification, PurchaseRequest, Product, Sale };
+// SystemSetting 관계 설정
+// 마지막 수정자 (관리자)
+User.hasMany(SystemSetting, { foreignKey: 'lastModifiedBy', as: 'modifiedSettings' });
+SystemSetting.belongsTo(User, { foreignKey: 'lastModifiedBy', as: 'modifier' });
+
+// MonthlyIncentive 관계 설정
+// 직원 (인센티브 대상자)
+User.hasMany(MonthlyIncentive, { foreignKey: 'userId', as: 'monthlyIncentives' });
+MonthlyIncentive.belongsTo(User, { foreignKey: 'userId', as: 'employee' });
+
+// 승인자 (관리자)
+User.hasMany(MonthlyIncentive, { foreignKey: 'approvedBy', as: 'approvedIncentives' });
+MonthlyIncentive.belongsTo(User, { foreignKey: 'approvedBy', as: 'approver' });
+
+// 생성자 (관리자)
+User.hasMany(MonthlyIncentive, { foreignKey: 'createdBy', as: 'createdIncentives' });
+MonthlyIncentive.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
+
+// Post-Product 관계 설정
+Product.hasMany(Post, { foreignKey: 'productId', as: 'posts' });
+Post.belongsTo(Product, { foreignKey: 'productId', as: 'product' });
+
+export { User, Campaign, Post, Notification, PurchaseRequest, Product, Sale, SystemSetting, MonthlyIncentive };
 export default db;

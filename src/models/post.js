@@ -38,6 +38,33 @@ const Post = sequelize.define('Post', {
     allowNull: true,
     comment: '첨부된 이미지 데이터 (JSON 배열)'
   },
+  // 상품 연결 필드
+  productId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'Products',
+      key: 'id',
+    },
+    comment: '연결된 상품 ID'
+  },
+  quantity: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    defaultValue: 1,
+    comment: '상품 수량'
+  },
+  // 업무 일정 필드
+  startDate: {
+    type: DataTypes.DATEONLY,
+    allowNull: true,
+    comment: '업무 시작일'
+  },
+  dueDate: {
+    type: DataTypes.DATEONLY,
+    allowNull: true,
+    comment: '업무 마감일'
+  },
   creationTime: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,

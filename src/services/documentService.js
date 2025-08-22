@@ -277,7 +277,7 @@ class DocumentService {
     `;
   }
 
-  // 견적서 HTML 템플릿
+  // 견적서 HTML 템플릿 (거래명세서와 동일한 내용)
   generateQuoteHTML(purchaseRequest, approver, requester) {
     const formatAmount = (amount) => {
       return new Intl.NumberFormat('ko-KR', {
@@ -293,8 +293,6 @@ class DocumentService {
         day: '2-digit'
       });
     };
-
-    const totalAmount = parseFloat(purchaseRequest.amount);
 
     return `
     <!DOCTYPE html>
@@ -350,42 +348,6 @@ class DocumentService {
                 padding-bottom: 8px; 
                 border-bottom: 2px solid #e5e7eb; 
             }
-            .quote-table { 
-                width: 100%; 
-                border-collapse: collapse; 
-                margin: 20px 0; 
-                border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                overflow: hidden;
-            }
-            .quote-table th { 
-                background: #f9fafb; 
-                padding: 15px; 
-                text-align: left; 
-                font-weight: bold; 
-                border-bottom: 1px solid #e5e7eb; 
-            }
-            .quote-table td { 
-                padding: 15px; 
-                border-bottom: 1px solid #f3f4f6; 
-            }
-            .quote-table tr:last-child td { 
-                border-bottom: none; 
-            }
-            .amount-right { 
-                text-align: right; 
-                font-weight: 600; 
-            }
-            .total-row { 
-                background: #fef3c7; 
-                font-weight: bold; 
-            }
-            .final-total { 
-                background: #10b981; 
-                color: white; 
-                font-size: 18px; 
-                font-weight: bold; 
-            }
             .info-grid { 
                 display: grid; 
                 grid-template-columns: 1fr 1fr; 
@@ -410,6 +372,44 @@ class DocumentService {
                 color: #1f2937; 
                 font-weight: 600; 
             }
+            .status-badge { 
+                padding: 4px 12px; 
+                border-radius: 20px; 
+                font-size: 12px; 
+                font-weight: bold; 
+                text-transform: uppercase; 
+            }
+            .status-approved { 
+                background: #d1fae5; 
+                color: #065f46; 
+            }
+            .amount-section { 
+                background: linear-gradient(135deg, #fef3c7 0%, #f59e0b 100%); 
+                padding: 25px; 
+                border-radius: 10px; 
+                text-align: center; 
+                margin: 30px 0; 
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); 
+            }
+            .amount-label { 
+                font-size: 14px; 
+                color: #92400e; 
+                margin-bottom: 10px; 
+                font-weight: 600; 
+            }
+            .amount-value { 
+                font-size: 32px; 
+                color: #92400e; 
+                font-weight: bold; 
+                text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1); 
+            }
+            .description-box { 
+                background: #f3f4f6; 
+                padding: 15px; 
+                border-radius: 6px; 
+                margin-top: 10px; 
+                border-left: 4px solid #6b7280; 
+            }
             .footer { 
                 margin-top: 40px; 
                 padding-top: 20px; 
@@ -424,15 +424,6 @@ class DocumentService {
                 color: white; 
                 margin-bottom: 5px; 
             }
-            .note-box { 
-                background: #eff6ff; 
-                border: 1px solid #93c5fd; 
-                border-radius: 6px; 
-                padding: 15px; 
-                margin: 20px 0; 
-                font-size: 13px; 
-                color: #1e40af; 
-            }
         </style>
     </head>
     <body>
@@ -446,83 +437,96 @@ class DocumentService {
             <div class="content">
                 <!-- 기본 정보 -->
                 <div class="section">
-                    <div class="section-title">📋 견적 정보</div>
+                    <div class="section-title">📋 요청 정보</div>
                     <div class="info-grid">
                         <div class="info-item">
-                            <div class="info-label">견적 번호</div>
-                            <div class="info-value">#QT-${purchaseRequest.id.toString().padStart(4, '0')}</div>
+                            <div class="info-label">요청번호</div>
+                            <div class="info-value">#REQ-${purchaseRequest.id.toString().padStart(4, '0')}</div>
                         </div>
                         <div class="info-item">
-                            <div class="info-label">견적일</div>
-                            <div class="info-value">${formatDate(new Date())}</div>
+                            <div class="info-label">요청일</div>
+                            <div class="info-value">${formatDate(purchaseRequest.createdAt)}</div>
                         </div>
                         <div class="info-item">
-                            <div class="info-label">유효기간</div>
-                            <div class="info-value">견적일로부터 30일</div>
+                            <div class="info-label">마감일</div>
+                            <div class="info-value">${purchaseRequest.dueDate ? formatDate(purchaseRequest.dueDate) : '미정'}</div>
                         </div>
                         <div class="info-item">
-                            <div class="info-label">담당자</div>
-                            <div class="info-value">${approver?.name || requester.name}</div>
+                            <div class="info-label">상태</div>
+                            <div class="info-value">
+                                <span class="status-badge status-approved">${purchaseRequest.status}</span>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">리소스 종류</div>
+                            <div class="info-value">${purchaseRequest.resourceType}</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- 견적 내역 -->
+                <!-- 담당자 정보 -->
                 <div class="section">
-                    <div class="section-title">💰 견적 내역</div>
-                    
-                    <table class="quote-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 50%;">항목</th>
-                                <th style="width: 20%;">분류</th>
-                                <th style="width: 30%;">금액</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>
-                                    <strong>${purchaseRequest.title}</strong>
-                                    ${purchaseRequest.description ? `<br><small style="color: #6b7280;">${purchaseRequest.description.substring(0, 150)}${purchaseRequest.description.length > 150 ? '...' : ''}</small>` : ''}
-                                </td>
-                                <td>${purchaseRequest.resourceType}</td>
-                                <td class="amount-right">${formatAmount(totalAmount)}</td>
-                            </tr>
-                            <tr class="final-total">
-                                <td colspan="2"><strong>총 견적 금액</strong></td>
-                                <td class="amount-right"><strong>${formatAmount(totalAmount)}</strong></td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <div class="section-title">👥 담당자 정보</div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">요청자</div>
+                            <div class="info-value">${requester.name}</div>
+                            <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">${requester.email}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">승인자</div>
+                            <div class="info-value">${approver?.name || '대기중'}</div>
+                            <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">${approver?.email || ''}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 금액 정보 -->
+                <div class="amount-section">
+                    <div class="amount-label">💰 승인 금액</div>
+                    <div class="amount-value">${formatAmount(purchaseRequest.amount)}</div>
+                </div>
+
+                <!-- 요청 내용 -->
+                <div class="section">
+                    <div class="section-title">📝 요청 내용</div>
+                    <div class="info-item" style="width: 100%;">
+                        <div class="info-label">제목</div>
+                        <div class="info-value">${purchaseRequest.title}</div>
+                    </div>
+                    ${purchaseRequest.description ? `
+                    <div class="description-box">
+                        <div class="info-label">상세 설명</div>
+                        <div style="margin-top: 8px; white-space: pre-line;">${purchaseRequest.description}</div>
+                    </div>
+                    ` : ''}
                 </div>
 
                 <!-- 캠페인 정보 -->
                 ${purchaseRequest.campaign ? `
                 <div class="section">
-                    <div class="section-title">🎯 프로젝트 정보</div>
+                    <div class="section-title">🎯 연관 캠페인</div>
                     <div class="info-item" style="width: 100%;">
-                        <div class="info-label">프로젝트명</div>
+                        <div class="info-label">캠페인명</div>
                         <div class="info-value">${purchaseRequest.campaign.name}</div>
                     </div>
                 </div>
                 ` : ''}
 
-                <!-- 견적 상세 -->
+                <!-- 승인 코멘트 -->
+                ${purchaseRequest.approverComment ? `
                 <div class="section">
-                    <div class="section-title">📄 견적 상세</div>
-                    <div class="note-box">
-                        <strong>견적 유효기간:</strong> 견적일로부터 30일<br>
-                        <strong>작업 기간:</strong> ${purchaseRequest.dueDate ? `${formatDate(purchaseRequest.dueDate)}까지` : '협의 후 결정'}<br>
-                        <strong>결제 방법:</strong> 계좌이체 또는 세금계산서<br>
-                        <strong>참고사항:</strong> 상세한 작업 내용 및 조건은 담당자와 협의 바랍니다.
+                    <div class="section-title">💬 승인자 코멘트</div>
+                    <div class="description-box">
+                        <div style="white-space: pre-line;">${purchaseRequest.approverComment}</div>
                     </div>
                 </div>
+                ` : ''}
             </div>
 
             <div class="footer">
-                <p>본 견적서는 BrandFlow 시스템에서 자동 생성되었습니다.</p>
+                <p>본 문서는 BrandFlow 시스템에서 자동 생성되었습니다.</p>
                 <p>생성일시: ${new Date().toLocaleString('ko-KR')}</p>
-                <p style="margin-top: 10px; font-weight: bold;">문의사항이 있으시면 담당자에게 연락 바랍니다.</p>
             </div>
         </div>
     </body>

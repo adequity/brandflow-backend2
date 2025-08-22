@@ -50,21 +50,22 @@ export default function(sequelize) {
     },
     sellingPrice: {
       type: DataTypes.DECIMAL(12, 2),
-      allowNull: false,
-      comment: '판매가 (클라이언트 청구 금액)'
+      allowNull: true,
+      comment: '권장 판매가 (옵셔널)'
     },
     
-    // 자동 계산 필드
+    // 자동 계산 필드 (판매가가 있을 때만)
     marginAmount: {
       type: DataTypes.VIRTUAL,
       get() {
+        if (!this.sellingPrice) return null;
         return this.sellingPrice - this.costPrice;
       }
     },
     marginRate: {
       type: DataTypes.VIRTUAL,
       get() {
-        if (this.costPrice === 0) return 0;
+        if (!this.sellingPrice || this.costPrice === 0) return null;
         return ((this.sellingPrice - this.costPrice) / this.costPrice * 100).toFixed(2);
       }
     },
@@ -85,13 +86,6 @@ export default function(sequelize) {
       comment: '판매 활성화 여부'
     },
     
-    // 인센티브 설정
-    incentiveRate: {
-      type: DataTypes.DECIMAL(5, 2),
-      allowNull: false,
-      defaultValue: 0,
-      comment: '직원 인센티브율 (%)'
-    },
     
     // 최소/최대 수량
     minQuantity: {
@@ -118,6 +112,13 @@ export default function(sequelize) {
       type: DataTypes.INTEGER,
       allowNull: false,
       comment: '상품 등록자 (본사 관리자)'
+    },
+    
+    // 회사 정보 (멀티테넌트)
+    company: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: '소속 회사 (null이면 전체 공용, 값이 있으면 해당 회사 전용)'
     }
     
   }, {
@@ -128,13 +129,14 @@ export default function(sequelize) {
       { fields: ['category'] },
       { fields: ['isActive'] },
       { fields: ['createdBy'] },
+      { fields: ['company'] },
       { fields: ['sku'], unique: true }
     ],
     
     // 가격 유효성 검증
     validate: {
       pricesValid() {
-        if (this.sellingPrice <= this.costPrice) {
+        if (this.sellingPrice && this.sellingPrice <= this.costPrice) {
           throw new Error('판매가는 원가보다 높아야 합니다.');
         }
       },

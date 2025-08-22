@@ -25,6 +25,13 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: false,
   },
+  // 직원 인센티브율 (이익의 몇 퍼센트를 인센티브로 지급할지)
+  incentiveRate: {
+    type: DataTypes.DECIMAL(5, 2),
+    allowNull: false,
+    defaultValue: 0,
+    comment: '직원 인센티브율 (%) - 이익의 퍼센트'
+  },
   // ⭐️ [추가] 생성자 ID를 저장하기 위한 필드
   // 어떤 관리자가 이 사용자를 생성했는지 추적합니다.
   creatorId: {

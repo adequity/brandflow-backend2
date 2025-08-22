@@ -64,13 +64,13 @@ export default function(sequelize) {
       }
     },
     
-    // 인센티브 계산
+    // 인센티브 계산 (직원의 인센티브율 기반)
     incentiveAmount: {
       type: DataTypes.VIRTUAL,
       get() {
-        // Product 관계에서 인센티브율을 가져와서 계산
-        if (this.Product && this.Product.incentiveRate) {
-          return (this.totalMargin * this.Product.incentiveRate / 100).toFixed(0);
+        // 직원(salesperson)의 인센티브율을 기반으로 계산
+        if (this.salesperson && this.salesperson.incentiveRate) {
+          return (this.totalMargin * this.salesperson.incentiveRate / 100).toFixed(0);
         }
         return 0;
       }

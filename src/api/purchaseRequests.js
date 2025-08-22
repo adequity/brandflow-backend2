@@ -271,6 +271,34 @@ router.put('/:id', async (req, res) => {
     
     await request.update(updateData);
     
+    // 구매요청 상태 변경 시 캠페인 집행 상태 자동 업데이트
+    if (updateData.status && request.campaignId) {
+      try {
+        const campaign = await Campaign.findByPk(request.campaignId);
+        
+        if (campaign) {
+          if (updateData.status === '승인됨') {
+            // 구매요청이 승인되면 캠페인 집행 상태를 '승인'으로 변경
+            await campaign.update({
+              executionStatus: '승인',
+              executionApprovedAt: new Date()
+            });
+            console.log(`캠페인 ${campaign.id} 집행 상태를 '승인'으로 업데이트`);
+          } else if (updateData.status === '완료됨') {
+            // 구매요청이 완료되면 캠페인 집행 상태를 '완료'로 변경
+            await campaign.update({
+              executionStatus: '완료',
+              executionCompletedAt: new Date()
+            });
+            console.log(`캠페인 ${campaign.id} 집행 상태를 '완료'로 업데이트`);
+          }
+        }
+      } catch (campaignUpdateError) {
+        console.error('캠페인 집행 상태 업데이트 실패:', campaignUpdateError);
+        // 실패해도 구매요청 업데이트는 성공으로 처리
+      }
+    }
+    
     // 업데이트된 요청 조회
     const updatedRequest = await PurchaseRequest.findByPk(id, {
       include: [

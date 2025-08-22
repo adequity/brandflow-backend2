@@ -11,7 +11,8 @@ async function getViewer(req) {
   const rawViewerRole = req.query.viewerRole || req.query.adminRole || '';
   
   const viewerId = Number(Array.isArray(rawViewerId) ? rawViewerId[0] : rawViewerId);
-  const viewerRole = String(Array.isArray(rawViewerRole) ? rawViewerRole[0] : rawViewerRole).trim();
+  // URL 디코딩 추가
+  const viewerRole = decodeURIComponent(String(Array.isArray(rawViewerRole) ? rawViewerRole[0] : rawViewerRole)).trim();
   
   let viewerCompany = null;
 
@@ -36,6 +37,12 @@ router.get('/', async (req, res) => {
         return res.json([]);
       }
       where.company = viewerCompany; // 같은 회사만
+    } else if (viewerRole === '직원') {
+      if (!viewerCompany) {
+        // 직원인데 company가 없으면 빈 결과 반환
+        return res.json([]);
+      }
+      where.company = viewerCompany; // 같은 회사만
     } else if (viewerRole === '클라이언트') {
       where.id = viewerId; // 본인만
     }
@@ -43,8 +50,12 @@ router.get('/', async (req, res) => {
 
     const users = await User.findAll({
       where,
-      attributes: ['id', 'name', 'email', 'role', 'company', 'createdAt', 'updatedAt']
+      attributes: ['id', 'name', 'email', 'role', 'company', 'contact', 'incentiveRate', 'createdAt', 'updatedAt']
     });
+    
+    console.log(`GET /api/users - 사용자 ${users.length}명 반환, viewerId: ${viewerId}, viewerRole: ${viewerRole}`);
+    console.log('반환된 사용자들:', users.map(u => ({ id: u.id, name: u.name, role: u.role, incentiveRate: u.incentiveRate })));
+    
     res.json(users);
   } catch (err) {
     console.error('사용자 조회 실패:', err);
@@ -93,18 +104,40 @@ router.get('/:id/campaigns', async (req, res) => {
 /** POST /api/users — 새 사용자 생성 */
 router.post('/', async (req, res) => {
   try {
+    console.log('POST /api/users - Raw params:', {
+      rawViewerId: req.query.viewerId || req.query.adminId,
+      rawViewerRole: req.query.viewerRole || req.query.adminRole || ''
+    });
+    
     const { viewerId, viewerRole } = await getViewer(req);
     
+    console.log('POST /api/users - Parsed params:', { viewerId, viewerRole });
+    console.log('POST /api/users - ViewerRole comparison:');
+    console.log('  Received viewerRole:', JSON.stringify(viewerRole));
+    console.log('  Expected "슈퍼 어드민":', JSON.stringify('슈퍼 어드민'));
+    console.log('  Expected "대행사 어드민":', JSON.stringify('대행사 어드민'));
+    console.log('  Match super admin:', viewerRole === '슈퍼 어드민');
+    console.log('  Match agency admin:', viewerRole === '대행사 어드민');
+    
     // 권한 확인: 슈퍼 어드민 또는 대행사 어드민만 사용자 생성 가능
-    if (viewerRole !== '슈퍼 어드민' && viewerRole !== '대행사 어드민') {
+    // Korean characters sometimes have encoding issues, so check multiple variations
+    const isSuperAdmin = viewerRole === '슈퍼 어드민' || 
+                        viewerRole === '슈퍼어드민' ||
+                        viewerRole.includes('슈퍼') && viewerRole.includes('어드민');
+    const isAgencyAdmin = viewerRole === '대행사 어드민' ||
+                         viewerRole === '대행사어드민' ||
+                         viewerRole.includes('대행사') && viewerRole.includes('어드민');
+    
+    if (!isSuperAdmin && !isAgencyAdmin) {
+      console.log('POST /api/users - Permission denied for viewerRole:', JSON.stringify(viewerRole));
       return res.status(403).json({ message: '권한이 없습니다. 관리자만 사용자를 생성할 수 있습니다.' });
     }
 
-    const { name, email, password, role, company, contact } = req.body;
+    const { name, email, password, role, company, contact, incentiveRate } = req.body;
 
-    // 대행사 어드민은 클라이언트와 직원 생성 가능 (슈퍼 어드민 제외)
-    if (viewerRole === '대행사 어드민' && role === '슈퍼 어드민') {
-      return res.status(403).json({ message: '대행사 어드민은 슈퍼 어드민 계정을 생성할 수 없습니다.' });
+    // 대행사 어드민은 클라이언트와 직원만 생성 가능 (슈퍼 어드민, 다른 대행사 어드민 제외)
+    if (isAgencyAdmin && (role === '슈퍼 어드민' || role === '대행사 어드민')) {
+      return res.status(403).json({ message: '대행사 어드민은 클라이언트와 직원만 생성할 수 있습니다.' });
     }
 
     // 필수 필드 검증
@@ -122,11 +155,16 @@ router.post('/', async (req, res) => {
     const bcrypt = await import('bcrypt');
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 대행사 어드민이 생성하는 사용자는 자동으로 같은 회사 배정
-    let finalCompany = company;
-    if (viewerRole === '대행사 어드민') {
+    // 회사 소속 결정 로직
+    let finalCompany = null;
+    if (isSuperAdmin) {
+      // 슈퍼 어드민만 새로운 회사 소속을 만들거나 임의의 회사 배정 가능
+      finalCompany = company || null;
+    } else if (isAgencyAdmin) {
+      // 대행사 어드민은 자신의 회사 소속으로만 팀원 생성 가능
       const viewer = await User.findByPk(viewerId, { attributes: ['company'] });
-      finalCompany = viewer?.company || company;
+      finalCompany = viewer?.company || null;
+      console.log(`대행사 어드민 ${viewerId}이 팀원 생성: 회사 ${finalCompany}로 강제 배정`);
     }
 
     // 사용자 생성
@@ -137,6 +175,7 @@ router.post('/', async (req, res) => {
       role,
       company: finalCompany || null,
       contact: contact || null,
+      incentiveRate: incentiveRate || 0,
       creatorId: viewerId
     });
 
@@ -158,7 +197,10 @@ router.put('/:id', async (req, res) => {
   try {
     const targetId = Number(req.params.id);
     const { viewerId, viewerRole } = await getViewer(req);
-    const { name, email, role, company, contact } = req.body;
+    const { name, email, role, company, contact, incentiveRate } = req.body;
+    
+    console.log(`PUT /api/users/${targetId} - viewerId: ${viewerId}, viewerRole: ${viewerRole}`);
+    console.log('Request body:', { name, email, role, company, contact, incentiveRate });
 
     // 수정 대상 사용자 정보 확인
     const targetUser = await User.findByPk(targetId);
@@ -205,6 +247,7 @@ router.put('/:id', async (req, res) => {
     if (role) updateData.role = role;
     if (company !== undefined) updateData.company = company;
     if (contact !== undefined) updateData.contact = contact;
+    if (incentiveRate !== undefined) updateData.incentiveRate = incentiveRate;
 
     await user.update(updateData);
 

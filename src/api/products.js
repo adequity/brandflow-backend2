@@ -29,11 +29,24 @@ async function getViewer(req) {
  */
 router.get('/', async (req, res) => {
   try {
-    const { viewerId, viewerRole } = await getViewer(req);
-    const { category, isActive = true, page = 1, limit = 50 } = req.query;
+    const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
+    const { category, isActive = 'true', page = 1, limit = 50 } = req.query;
+    
+    console.log('Products API - viewerId:', viewerId, 'viewerRole:', viewerRole, 'isActive:', isActive);
     
     // 기본적으로 활성화된 상품만 조회
     let where = { isActive: isActive === 'true' };
+    
+    // 회사별 필터링
+    if (viewerRole === '슈퍼 어드민') {
+      // 슈퍼 어드민은 모든 상품 조회 가능
+    } else if (viewerRole === '대행사 어드민' || viewerRole === '직원' || viewerRole === '클라이언트') {
+      // 대행사 관련 사용자는 공용 상품(company = null) + 자기 회사 상품만
+      where[Op.or] = [
+        { company: null }, // 공용 상품
+        { company: viewerCompany } // 자기 회사 상품
+      ];
+    }
     
     // 카테고리 필터
     if (category) {
@@ -103,7 +116,7 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { viewerId, viewerRole } = await getViewer(req);
+    const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
     
     // 권한 확인: 슈퍼 어드민 또는 대행사 어드민만 상품 생성 가능
     if (viewerRole !== '슈퍼 어드민' && viewerRole !== '대행사 어드민') {
@@ -118,21 +131,20 @@ router.post('/', async (req, res) => {
       costPrice,
       sellingPrice,
       unit = '건',
-      incentiveRate = 0,
       minQuantity = 1,
       maxQuantity,
       tags
     } = req.body;
     
     // 필수 필드 검증
-    if (!name || !category || !costPrice || !sellingPrice) {
+    if (!name || !category || !costPrice) {
       return res.status(400).json({ 
-        message: '상품명, 카테고리, 원가, 판매가는 필수입니다.' 
+        message: '상품명, 카테고리, 원가는 필수입니다.' 
       });
     }
     
-    // 가격 검증
-    if (parseFloat(sellingPrice) <= parseFloat(costPrice)) {
+    // 가격 검증 (판매가가 있을 때만)
+    if (sellingPrice && parseFloat(sellingPrice) <= parseFloat(costPrice)) {
       return res.status(400).json({ 
         message: '판매가는 원가보다 높아야 합니다.' 
       });
@@ -153,14 +165,14 @@ router.post('/', async (req, res) => {
       sku,
       category,
       costPrice: parseFloat(costPrice),
-      sellingPrice: parseFloat(sellingPrice),
+      sellingPrice: sellingPrice ? parseFloat(sellingPrice) : null,
       unit,
-      incentiveRate: parseFloat(incentiveRate),
       minQuantity: parseInt(minQuantity),
       maxQuantity: maxQuantity ? parseInt(maxQuantity) : null,
       tags: tags || null,
       createdBy: viewerId,
-      isActive: true
+      isActive: true,
+      company: viewerRole === '슈퍼 어드민' ? null : viewerCompany // 슈퍼 어드민이 만든 상품은 공용, 대행사 어드민이 만든 상품은 회사 전용
     });
     
     // 생성된 상품을 다시 조회 (관계 포함)
@@ -209,7 +221,7 @@ router.put('/:id', async (req, res) => {
     const updateData = {};
     const allowedFields = [
       'name', 'description', 'sku', 'category', 'costPrice', 'sellingPrice',
-      'unit', 'incentiveRate', 'minQuantity', 'maxQuantity', 'tags', 'isActive'
+      'unit', 'minQuantity', 'maxQuantity', 'tags', 'isActive'
     ];
     
     allowedFields.forEach(field => {
@@ -218,11 +230,11 @@ router.put('/:id', async (req, res) => {
       }
     });
     
-    // 가격 검증
+    // 가격 검증 (판매가가 있을 때만)
     const newCostPrice = updateData.costPrice || product.costPrice;
-    const newSellingPrice = updateData.sellingPrice || product.sellingPrice;
+    const newSellingPrice = updateData.sellingPrice !== undefined ? updateData.sellingPrice : product.sellingPrice;
     
-    if (parseFloat(newSellingPrice) <= parseFloat(newCostPrice)) {
+    if (newSellingPrice && parseFloat(newSellingPrice) <= parseFloat(newCostPrice)) {
       return res.status(400).json({ 
         message: '판매가는 원가보다 높아야 합니다.' 
       });

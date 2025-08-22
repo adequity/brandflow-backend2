@@ -85,7 +85,7 @@ router.get('/', async (req, res) => {
       { 
         model: Product, 
         as: 'product',
-        attributes: ['id', 'name', 'category', 'unit', 'incentiveRate']
+        attributes: ['id', 'name', 'category', 'unit']
       },
       { 
         model: User, 
@@ -143,7 +143,7 @@ router.get('/:id', async (req, res) => {
         { 
           model: Product, 
           as: 'product',
-          attributes: ['id', 'name', 'category', 'unit', 'incentiveRate', 'costPrice', 'sellingPrice']
+          attributes: ['id', 'name', 'category', 'unit', 'costPrice', 'sellingPrice']
         },
         { 
           model: User, 
@@ -282,7 +282,7 @@ router.post('/', async (req, res) => {
         { 
           model: Product, 
           as: 'product',
-          attributes: ['id', 'name', 'category', 'unit', 'incentiveRate']
+          attributes: ['id', 'name', 'category', 'unit']
         },
         { 
           model: User, 
@@ -373,7 +373,7 @@ router.put('/:id', async (req, res) => {
         { 
           model: Product, 
           as: 'product',
-          attributes: ['id', 'name', 'category', 'unit', 'incentiveRate']
+          attributes: ['id', 'name', 'category', 'unit']
         },
         { 
           model: User, 
@@ -489,7 +489,10 @@ router.get('/summary/stats', async (req, res) => {
       Sale.count({ where: { ...userFilter, status: '승인' } }),
       Sale.findAll({
         where: { ...userFilter, status: '승인' },
-        include: [{ model: Product, as: 'product', attributes: ['incentiveRate'] }],
+        include: [
+          { model: Product, as: 'product', attributes: ['id'] },
+          { model: User, as: 'salesperson', attributes: ['incentiveRate'] }
+        ],
         attributes: ['actualCostPrice', 'actualSellingPrice', 'quantity']
       })
     ]);
@@ -503,7 +506,7 @@ router.get('/summary/stats', async (req, res) => {
       const revenue = sale.actualSellingPrice * sale.quantity;
       const cost = sale.actualCostPrice * sale.quantity;
       const margin = revenue - cost;
-      const incentive = margin * (sale.product?.incentiveRate || 0) / 100;
+      const incentive = margin * (sale.salesperson?.incentiveRate || 0) / 100;
       
       totalRevenue += revenue;
       totalMargin += margin;
@@ -521,6 +524,76 @@ router.get('/summary/stats', async (req, res) => {
     
   } catch (error) {
     console.error('매출 통계 조회 실패:', error);
+    res.status(500).json({ message: '서버 에러가 발생했습니다.' });
+  }
+});
+
+/**
+ * POST /api/sales/:id/create-purchase-request
+ * 매출 데이터를 기반으로 구매요청 생성
+ */
+router.post('/:id/create-purchase-request', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { viewerId, viewerRole } = await getViewer(req);
+    const { description, requestDate } = req.body;
+
+    // 권한 확인 (대행사 어드민과 직원만)
+    if (!['대행사 어드민', '직원'].includes(viewerRole)) {
+      return res.status(403).json({ message: '구매요청 생성 권한이 없습니다.' });
+    }
+
+    // 매출 데이터 조회
+    const sale = await Sale.findByPk(id, {
+      include: [
+        { model: Product, as: 'product' },
+        { model: Campaign, as: 'campaign' }
+      ]
+    });
+
+    if (!sale) {
+      return res.status(404).json({ message: '매출 데이터를 찾을 수 없습니다.' });
+    }
+
+    // 이미 구매요청이 생성되었는지 확인
+    const { PurchaseRequest } = require('../models/index.js');
+    const existingRequest = await PurchaseRequest.findOne({
+      where: { 
+        campaignId: sale.campaignId,
+        description: { [Op.like]: `%${sale.saleNumber}%` }
+      }
+    });
+
+    if (existingRequest) {
+      return res.status(400).json({ message: '이미 구매요청이 생성되었습니다.' });
+    }
+
+    // 구매요청 생성
+    const purchaseRequest = await PurchaseRequest.create({
+      description: description || `${sale.product?.name || '상품'} - ${sale.clientName} (매출번호: ${sale.saleNumber})`,
+      category: '광고비', // 기본 카테고리
+      amount: sale.totalSales, // 매출 금액으로 설정
+      requestDate: requestDate ? new Date(requestDate) : new Date(),
+      requesterId: viewerId,
+      campaignId: sale.campaignId,
+      postId: null, // 매출 기반 요청은 특정 포스트와 연결되지 않음
+      urgency: '보통',
+      status: '대기중'
+    });
+
+    // 생성된 구매요청을 다시 조회 (관계 포함)
+    const createdRequest = await PurchaseRequest.findByPk(purchaseRequest.id, {
+      include: [
+        { model: User, as: 'requester', attributes: ['id', 'name', 'email'] },
+        { model: Campaign, as: 'campaign', attributes: ['id', 'name'] }
+      ]
+    });
+
+    console.log(`매출 ${sale.saleNumber}을 기반으로 구매요청 생성: ${purchaseRequest.id}`);
+    res.status(201).json(createdRequest);
+
+  } catch (error) {
+    console.error('구매요청 생성 실패:', error);
     res.status(500).json({ message: '서버 에러가 발생했습니다.' });
   }
 });
