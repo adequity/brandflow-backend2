@@ -260,7 +260,10 @@ app.post('/api/campaigns', (req, res) => {
   res.status(201).json(newCampaign);
 });
 
-// GET /api/company/logo - 회사 로고 조회
+// 대행사별 로고 저장소 (실제로는 데이터베이스 사용)
+const companyLogos = new Map();
+
+// GET /api/company/logo - 회사 로고 조회 (대행사별)
 app.get('/api/company/logo', (req, res) => {
   const rawViewerId = req.query.viewerId || req.query.adminId;
   const rawViewerRole = req.query.viewerRole || req.query.adminRole || '';
@@ -270,16 +273,20 @@ app.get('/api/company/logo', (req, res) => {
   
   console.log('GET /api/company/logo - Parsed params:', { viewerId, viewerRole });
   
-  // 더미 로고 데이터 (실제로는 데이터베이스에서 조회)
-  const logoData = {
+  // 사용자의 회사 정보 찾기
+  const user = mockUsers.find(u => u.id === viewerId);
+  const companyName = user?.company || 'default';
+  
+  // 해당 회사의 로고 데이터 조회
+  const logoData = companyLogos.get(companyName) || {
     id: 1,
-    logoUrl: null, // 기본적으로 로고 없음
+    logoUrl: null,
     uploadedAt: null,
-    companyId: viewerId,
+    companyId: companyName,
     updatedBy: viewerId
   };
   
-  console.log('GET /api/company/logo - 로고 데이터 반환:', logoData);
+  console.log(`GET /api/company/logo - ${companyName} 회사 로고 데이터:`, logoData);
   res.json(logoData);
 });
 
@@ -310,20 +317,27 @@ app.post('/api/company/logo', (req, res) => {
     return res.status(400).json({ message: '로고 URL이 필요합니다.' });
   }
   
-  // 더미로 로고 업로드 성공 처리
+  // 사용자의 회사 정보 찾기
+  const user = mockUsers.find(u => u.id === viewerId);
+  const companyName = user?.company || 'default';
+  
+  // 해당 회사의 로고 데이터 저장
   const updatedLogo = {
-    id: 1,
+    id: Date.now(),
     logoUrl: logoUrl,
     uploadedAt: new Date().toISOString(),
-    companyId: viewerId,
+    companyId: companyName,
     updatedBy: viewerId
   };
   
-  console.log('POST /api/company/logo - 로고 업로드 성공:', updatedLogo);
+  // 대행사별 로고 저장
+  companyLogos.set(companyName, updatedLogo);
+  
+  console.log(`POST /api/company/logo - ${companyName} 회사 로고 업로드 성공:`, updatedLogo);
   res.status(200).json(updatedLogo);
 });
 
-// DELETE /api/company/logo - 회사 로고 제거
+// DELETE /api/company/logo - 회사 로고 제거 (대행사별)
 app.delete('/api/company/logo', (req, res) => {
   const rawViewerId = req.query.viewerId || req.query.adminId;
   const rawViewerRole = req.query.viewerRole || req.query.adminRole || '';
@@ -343,7 +357,14 @@ app.delete('/api/company/logo', (req, res) => {
     return res.status(403).json({ message: '권한이 없습니다. 대행사 어드민만 로고를 제거할 수 있습니다.' });
   }
   
-  console.log('DELETE /api/company/logo - 로고 제거 성공');
+  // 사용자의 회사 정보 찾기
+  const user = mockUsers.find(u => u.id === viewerId);
+  const companyName = user?.company || 'default';
+  
+  // 해당 회사의 로고 제거
+  companyLogos.delete(companyName);
+  
+  console.log(`DELETE /api/company/logo - ${companyName} 회사 로고 제거 성공`);
   res.status(200).json({ message: '로고가 제거되었습니다.' });
 });
 
