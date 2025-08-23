@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: brandflow-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node test-server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        generateValue: true

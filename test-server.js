@@ -13,6 +13,15 @@ app.use(express.json());
 // Parse URL-encoded bodies
 app.use(express.urlencoded({ extended: true }));
 
+// Health check endpoint for Render
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    service: 'brandflow-backend' 
+  });
+});
+
 // Test POST endpoint for user creation
 app.post('/api/users', (req, res) => {
   const rawViewerId = req.query.viewerId || req.query.adminId;
