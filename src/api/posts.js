@@ -2,6 +2,7 @@ import express from 'express';
 import { Post, User, Campaign, Sale, Product } from '../models/index.js';
 import { Op } from 'sequelize';
 import NotificationService from '../services/notificationService.js';
+import { getViewer as getViewerUtil, checkPostApprovalAccess, checkCampaignAccess } from '../utils/permissionUtils.js';
 
 const router = express.Router();
 
@@ -70,24 +71,7 @@ async function createSaleRecord(post, campaignUser, product) {
   }
 }
 
-/**
- * 호출자 정보 파싱
- */
-async function getViewer(req) {
-  const rawViewerId = req.query.viewerId || req.query.adminId;
-  const rawViewerRole = req.query.viewerRole || req.query.adminRole || '';
-  
-  const viewerId = Number(Array.isArray(rawViewerId) ? rawViewerId[0] : rawViewerId);
-  const viewerRole = String(Array.isArray(rawViewerRole) ? rawViewerRole[0] : rawViewerRole).trim();
-  
-  let viewerCompany = null;
-
-  if (viewerId && !isNaN(viewerId)) {
-    const v = await User.findByPk(viewerId, { attributes: ['id', 'company', 'role'] });
-    viewerCompany = v?.company ?? null;
-  }
-  return { viewerId, viewerRole, viewerCompany };
-}
+// getViewer 함수는 permissionUtils.js에서 import
 
 // PUT /api/posts/:id - 포스트 정보 수정 (주제, 목차, 링크 등)
 router.put('/:id', async (req, res) => {
@@ -96,7 +80,7 @@ router.put('/:id', async (req, res) => {
     const { title, outline, publishedUrl, topicStatus, outlineStatus, images, productId, quantity, workType, startDate, dueDate } = req.body;
 
     try {
-        const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
+        const { viewerId, viewerRole, viewerCompany } = await getViewerUtil(req);
         
         const post = await Post.findByPk(id, {
             include: [
@@ -238,7 +222,7 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
+        const { viewerId, viewerRole, viewerCompany } = await getViewerUtil(req);
         
         const post = await Post.findByPk(id, {
             include: [{
@@ -295,7 +279,7 @@ router.put('/:id/status', async (req, res) => {
     const { topicStatus, outlineStatus, rejectReason } = req.body;
 
     try {
-        const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
+        const { viewerId, viewerRole, viewerCompany } = await getViewerUtil(req);
         
         const post = await Post.findByPk(id, {
             include: [{
@@ -350,5 +334,147 @@ router.put('/:id/status', async (req, res) => {
     }
 });
 
+/**
+ * PUT /api/posts/:id/approve - 업무 승인 (주제/목차/결과물)
+ * 클라이언트만 본인 캠페인의 업무를 승인할 수 있음
+ */
+router.put('/:id/approve', async (req, res) => {
+    const { id } = req.params;
+    const { type, status, rejectReason } = req.body; // type: 'topic', 'outline', 'result'
+    
+    try {
+        const { viewerId, viewerRole, viewerCompany, viewer } = await getViewerUtil(req);
+        
+        // 업무 조회
+        const post = await Post.findByPk(id, {
+            include: [
+                {
+                    model: Campaign,
+                    as: 'Campaign',
+                    include: [
+                        {
+                            model: User,
+                            as: 'User', // 캠페인의 클라이언트
+                            attributes: ['id', 'name', 'email', 'company', 'role']
+                        }
+                    ]
+                }
+            ]
+        });
+        
+        if (!post) {
+            return res.status(404).json({ message: '업무를 찾을 수 없습니다.' });
+        }
+        
+        // 캠페인 접근 권한 확인
+        const hasAccess = await checkCampaignAccess(viewerRole, viewerCompany, viewerId, post.Campaign);
+        if (!hasAccess) {
+            return res.status(403).json({ message: '이 캠페인에 접근할 권한이 없습니다.' });
+        }
+        
+        // 승인 권한 확인 (클라이언트만 본인 캠페인의 업무 승인 가능)
+        const canApprove = checkPostApprovalAccess(viewerRole, viewerId, post.Campaign, post);
+        if (!canApprove) {
+            return res.status(403).json({ 
+                message: '승인 권한이 없습니다. 클라이언트만 본인 캠페인의 업무를 승인할 수 있습니다.' 
+            });
+        }
+        
+        // 상태 업데이트
+        let updateField = '';
+        let notification = {
+            targetUserId: null,
+            title: '',
+            message: ''
+        };
+        
+        switch(type) {
+            case 'topic':
+                updateField = 'topicStatus';
+                post.topicStatus = status;
+                notification = {
+                    targetUserId: post.Campaign.managerId, // 캠페인 매니저에게 알림
+                    title: `주제 ${status === '승인됨' ? '승인' : '반려'}`,
+                    message: `캠페인 "${post.Campaign.name}"의 업무 "${post.title}" 주제가 ${status === '승인됨' ? '승인' : '반려'}되었습니다.`
+                };
+                break;
+                
+            case 'outline':
+                updateField = 'outlineStatus';
+                post.outlineStatus = status;
+                notification = {
+                    targetUserId: post.Campaign.managerId,
+                    title: `목차 ${status === '승인됨' ? '승인' : '반려'}`,
+                    message: `캠페인 "${post.Campaign.name}"의 업무 "${post.title}" 목차가 ${status === '승인됨' ? '승인' : '반려'}되었습니다.`
+                };
+                break;
+                
+            case 'result':
+                // 결과물 승인은 publishedUrl이 있을 때만 가능
+                if (!post.publishedUrl) {
+                    return res.status(400).json({ message: '결과물이 등록되지 않았습니다.' });
+                }
+                
+                if (status === '승인됨') {
+                    post.status = '완료';
+                    
+                    // 상품이 연결되어 있으면 자동으로 Sale 레코드 생성
+                    if (post.productId) {
+                        const product = await Product.findByPk(post.productId);
+                        if (product) {
+                            await createSaleRecord(post, post.Campaign.User, product);
+                        }
+                    }
+                }
+                
+                notification = {
+                    targetUserId: post.Campaign.managerId,
+                    title: `결과물 ${status === '승인됨' ? '승인' : '반려'}`,
+                    message: `캠페인 "${post.Campaign.name}"의 업무 "${post.title}" 결과물이 ${status === '승인됨' ? '승인' : '반려'}되었습니다.`
+                };
+                break;
+                
+            default:
+                return res.status(400).json({ message: '올바르지 않은 승인 타입입니다.' });
+        }
+        
+        // 반려 사유 저장
+        if (status === '반려됨' && rejectReason) {
+            post.rejectReason = rejectReason;
+        }
+        
+        await post.save();
+        
+        // 알림 전송
+        if (notification.targetUserId) {
+            try {
+                await NotificationService.createNotification({
+                    userId: notification.targetUserId,
+                    title: notification.title,
+                    message: notification.message,
+                    type: 'approval',
+                    relatedId: post.id,
+                    relatedType: 'post'
+                });
+            } catch (notificationError) {
+                console.error('알림 전송 실패:', notificationError);
+            }
+        }
+        
+        res.status(200).json({
+            message: `${type} ${status === '승인됨' ? '승인' : '반려'} 완료`,
+            post: {
+                id: post.id,
+                [updateField]: post[updateField],
+                status: post.status,
+                rejectReason: post.rejectReason
+            }
+        });
+        
+    } catch (error) {
+        console.error(`업무(ID: ${id}) 승인 처리 실패:`, error);
+        res.status(500).json({ message: '서버 에러가 발생했습니다.' });
+    }
+});
 
 export default router;

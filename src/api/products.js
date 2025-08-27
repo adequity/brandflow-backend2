@@ -2,27 +2,9 @@
 import express from 'express';
 import { Product, User } from '../models/index.js';
 import { Op } from 'sequelize';
+import { getViewer } from '../utils/permissionUtils.js';
 
 const router = express.Router();
-
-/**
- * 호출자 정보 파싱
- */
-async function getViewer(req) {
-  const rawViewerId = req.query.viewerId || req.query.adminId;
-  const rawViewerRole = req.query.viewerRole || req.query.adminRole || '';
-  
-  const viewerId = Number(Array.isArray(rawViewerId) ? rawViewerId[0] : rawViewerId);
-  const viewerRole = String(Array.isArray(rawViewerRole) ? rawViewerRole[0] : rawViewerRole).trim();
-  
-  let viewerCompany = null;
-
-  if (viewerId && !isNaN(viewerId)) {
-    const v = await User.findByPk(viewerId, { attributes: ['id', 'company', 'role'] });
-    viewerCompany = v?.company ?? null;
-  }
-  return { viewerId, viewerRole, viewerCompany };
-}
 
 /**
  * GET /api/products - 상품 목록 조회
@@ -31,8 +13,6 @@ router.get('/', async (req, res) => {
   try {
     const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
     const { category, isActive = 'true', page = 1, limit = 50 } = req.query;
-    
-    console.log('Products API - viewerId:', viewerId, 'viewerRole:', viewerRole, 'isActive:', isActive);
     
     // 기본적으로 활성화된 상품만 조회
     let where = { isActive: isActive === 'true' };

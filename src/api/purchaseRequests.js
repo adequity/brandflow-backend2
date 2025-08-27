@@ -4,34 +4,19 @@ import { PurchaseRequest, User, Campaign, Post } from '../models/index.js';
 import { Op } from 'sequelize';
 import DocumentService from '../services/documentService.js';
 import fs from 'fs/promises';
+import { getViewer as getViewerUtil, checkPurchaseRequestApprovalAccess } from '../utils/permissionUtils.js';
+import NotificationService from '../services/notificationService.js';
 
 const router = express.Router();
 
-/**
- * 호출자 정보 파싱
- */
-async function getViewer(req) {
-  const rawViewerId = req.query.viewerId || req.query.adminId;
-  const rawViewerRole = req.query.viewerRole || req.query.adminRole || '';
-  
-  const viewerId = Number(Array.isArray(rawViewerId) ? rawViewerId[0] : rawViewerId);
-  const viewerRole = String(Array.isArray(rawViewerRole) ? rawViewerRole[0] : rawViewerRole).trim();
-  
-  let viewerCompany = null;
-
-  if (viewerId && !isNaN(viewerId)) {
-    const v = await User.findByPk(viewerId, { attributes: ['id', 'company', 'role'] });
-    viewerCompany = v?.company ?? null;
-  }
-  return { viewerId, viewerRole, viewerCompany };
-}
+// getViewer 함수는 permissionUtils.js에서 import
 
 /**
  * GET /api/purchase-requests - 구매요청 목록 조회
  */
 router.get('/', async (req, res) => {
   try {
-    const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
+    const { viewerId, viewerRole, viewerCompany } = await getViewerUtil(req);
     const { status, resourceType, page = 1, limit = 20 } = req.query;
     
     // 권한별 필터
@@ -97,7 +82,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
+    const { viewerId, viewerRole, viewerCompany } = await getViewerUtil(req);
     
     const request = await PurchaseRequest.findByPk(id, {
       include: [
@@ -146,7 +131,7 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { viewerId, viewerRole } = await getViewer(req);
+    const { viewerId, viewerRole } = await getViewerUtil(req);
     
     // 직원과 대행사 어드민만 요청 생성 가능
     if (!['직원', '대행사 어드민'].includes(viewerRole)) {
@@ -212,7 +197,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
+    const { viewerId, viewerRole, viewerCompany } = await getViewerUtil(req);
     
     const request = await PurchaseRequest.findByPk(id, {
       include: [{ model: User, as: 'requester', attributes: ['id', 'company'] }]
@@ -323,7 +308,7 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
+    const { viewerId, viewerRole, viewerCompany } = await getViewerUtil(req);
     
     const request = await PurchaseRequest.findByPk(id, {
       include: [{ model: User, as: 'requester', attributes: ['id', 'company'] }]
@@ -370,7 +355,7 @@ router.post('/:id/generate-documents', async (req, res) => {
   try {
     const { id } = req.params;
     const { type = 'transaction' } = req.body; // 'transaction' 또는 'quote'
-    const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
+    const { viewerId, viewerRole, viewerCompany } = await getViewerUtil(req);
     
     // 구매요청 조회
     const request = await PurchaseRequest.findByPk(id, {
@@ -451,7 +436,7 @@ router.post('/:id/generate-documents', async (req, res) => {
  */
 router.get('/summary/stats', async (req, res) => {
   try {
-    const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
+    const { viewerId, viewerRole, viewerCompany } = await getViewerUtil(req);
     
     // 권한별 필터
     let userFilter = {};
@@ -513,6 +498,120 @@ router.get('/summary/stats', async (req, res) => {
     
   } catch (error) {
     console.error('구매요청 통계 조회 실패:', error);
+    res.status(500).json({ message: '서버 에러가 발생했습니다.' });
+  }
+});
+
+/**
+ * PUT /api/purchase-requests/:id/approve - 발주요청 승인/반려
+ * 대행사 어드민만 같은 회사의 발주요청을 승인할 수 있음
+ */
+router.put('/:id/approve', async (req, res) => {
+  const { id } = req.params;
+  const { status, approverComment } = req.body; // status: '승인됨' | '반려됨'
+  
+  try {
+    const { viewerId, viewerRole, viewerCompany, viewer } = await getViewerUtil(req);
+    
+    // 발주요청 조회
+    const request = await PurchaseRequest.findByPk(id, {
+      include: [
+        {
+          model: User,
+          as: 'requester',
+          attributes: ['id', 'name', 'email', 'company', 'role']
+        },
+        {
+          model: Campaign,
+          as: 'campaign',
+          attributes: ['id', 'name']
+        }
+      ]
+    });
+    
+    if (!request) {
+      return res.status(404).json({ message: '발주요청을 찾을 수 없습니다.' });
+    }
+    
+    // 승인 권한 확인
+    const canApprove = checkPurchaseRequestApprovalAccess(viewerRole, viewerCompany, request);
+    if (!canApprove) {
+      return res.status(403).json({ 
+        message: '승인 권한이 없습니다. 대행사 어드민만 같은 회사의 발주요청을 승인할 수 있습니다.' 
+      });
+    }
+    
+    // 이미 처리된 요청인지 확인
+    if (request.status !== '승인 대기' && request.status !== 'pending') {
+      return res.status(400).json({ 
+        message: '이미 처리된 요청입니다.',
+        currentStatus: request.status 
+      });
+    }
+    
+    // 상태 업데이트
+    request.status = status;
+    request.approverComment = approverComment || null;
+    request.approverId = viewerId;
+    request.approvedDate = status === '승인됨' ? new Date() : null;
+    
+    await request.save();
+    
+    // 요청자에게 알림 전송
+    try {
+      await NotificationService.createNotification({
+        userId: request.requesterId,
+        title: `발주요청 ${status === '승인됨' ? '승인' : '반려'}`,
+        message: `"${request.title}" 발주요청이 ${status === '승인됨' ? '승인' : '반려'}되었습니다.` +
+                (approverComment ? `\n사유: ${approverComment}` : ''),
+        type: 'approval',
+        relatedId: request.id,
+        relatedType: 'purchase_request'
+      });
+    } catch (notificationError) {
+      console.error('알림 전송 실패:', notificationError);
+    }
+    
+    // 승인된 경우 해당 캠페인 매니저에게도 알림
+    if (status === '승인됨' && request.campaign) {
+      try {
+        const campaign = await Campaign.findByPk(request.campaignId, {
+          attributes: ['id', 'name', 'managerId']
+        });
+        
+        if (campaign && campaign.managerId !== request.requesterId) {
+          await NotificationService.createNotification({
+            userId: campaign.managerId,
+            title: '발주요청 승인 완료',
+            message: `캠페인 "${campaign.name}"의 발주요청 "${request.title}"이 승인되었습니다.`,
+            type: 'info',
+            relatedId: request.id,
+            relatedType: 'purchase_request'
+          });
+        }
+      } catch (notificationError) {
+        console.error('캠페인 매니저 알림 전송 실패:', notificationError);
+      }
+    }
+    
+    res.status(200).json({
+      message: `발주요청 ${status === '승인됨' ? '승인' : '반려'} 완료`,
+      request: {
+        id: request.id,
+        status: request.status,
+        approverComment: request.approverComment,
+        approverId: request.approverId,
+        approvedDate: request.approvedDate,
+        approver: {
+          id: viewer.id,
+          name: viewer.name,
+          email: viewer.email
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error(`발주요청(ID: ${id}) 승인 처리 실패:`, error);
     res.status(500).json({ message: '서버 에러가 발생했습니다.' });
   }
 });

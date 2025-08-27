@@ -3,27 +3,10 @@ import express from 'express';
 import { MonthlyIncentive, User, Sale } from '../models/index.js';
 import { Op } from 'sequelize';
 import sequelize from '../config/db.js';
+import { getViewer, checkIncentiveApprovalAccess } from '../utils/permissionUtils.js';
 
 const router = express.Router();
 
-/**
- * 호출자 정보 파싱
- */
-async function getViewer(req) {
-  const rawViewerId = req.query.viewerId || req.query.adminId;
-  const rawViewerRole = req.query.viewerRole || req.query.adminRole || '';
-  
-  const viewerId = Number(Array.isArray(rawViewerId) ? rawViewerId[0] : rawViewerId);
-  const viewerRole = String(Array.isArray(rawViewerRole) ? rawViewerRole[0] : rawViewerRole).trim();
-  
-  let viewerCompany = null;
-
-  if (viewerId && !isNaN(viewerId)) {
-    const v = await User.findByPk(viewerId, { attributes: ['id', 'company', 'role'] });
-    viewerCompany = v?.company ?? null;
-  }
-  return { viewerId, viewerRole, viewerCompany };
-}
 
 /**
  * 특정 월의 직원별 매출 데이터 집계
@@ -414,7 +397,7 @@ router.get('/:id', async (req, res) => {
 });
 
 /**
- * PUT /api/monthly-incentives/:id - 인센티브 수정/승인
+ * PUT /api/monthly-incentives/:id - 인센티브 수정/승인 (권한 유틸리티 적용)
  */
 router.put('/:id', async (req, res) => {
   try {
@@ -429,18 +412,9 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ message: '인센티브를 찾을 수 없습니다.' });
     }
     
-    // 권한 확인
-    let hasPermission = false;
-    
-    if (viewerRole === '슈퍼 어드민') {
-      hasPermission = true;
-    } else if (viewerRole === '대행사 어드민') {
-      if (viewerCompany && incentive.employee?.company === viewerCompany) {
-        hasPermission = true;
-      }
-    }
-    
-    if (!hasPermission) {
+    // 인센티브 승인 권한 검증
+    const canApprove = checkIncentiveApprovalAccess(viewerRole, viewerCompany, incentive);
+    if (!canApprove) {
       return res.status(403).json({ message: '권한이 없습니다.' });
     }
     
@@ -485,6 +459,80 @@ router.put('/:id', async (req, res) => {
     
   } catch (error) {
     console.error('인센티브 수정 실패:', error);
+    res.status(500).json({ message: '서버 에러가 발생했습니다.' });
+  }
+});
+
+/**
+ * PUT /api/monthly-incentives/:id/approve - 인센티브 승인/반려
+ */
+router.put('/:id/approve', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, adjustmentAmount, adjustmentReason, paymentMemo } = req.body;
+    const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
+    
+    const incentive = await MonthlyIncentive.findByPk(id, {
+      include: [{ model: User, as: 'employee', attributes: ['id', 'name', 'company'] }]
+    });
+    
+    if (!incentive) {
+      return res.status(404).json({ message: '인센티브를 찾을 수 없습니다.' });
+    }
+    
+    // 인센티브 승인 권한 검증
+    const canApprove = checkIncentiveApprovalAccess(viewerRole, viewerCompany, incentive);
+    if (!canApprove) {
+      return res.status(403).json({ message: '인센티브 승인 권한이 없습니다.' });
+    }
+    
+    // 승인 가능한 상태인지 확인
+    if (!['검토대기'].includes(incentive.status)) {
+      return res.status(400).json({ message: '승인 가능한 상태가 아닙니다.' });
+    }
+    
+    const updateData = {
+      status: status || '승인완료',
+      approvedBy: viewerId,
+      approvedAt: new Date()
+    };
+    
+    if (adjustmentAmount !== undefined) {
+      updateData.adjustmentAmount = Number(adjustmentAmount) || 0;
+    }
+    
+    if (adjustmentReason) {
+      updateData.adjustmentReason = adjustmentReason;
+    }
+    
+    if (paymentMemo) {
+      updateData.paymentMemo = paymentMemo;
+    }
+    
+    await incentive.update(updateData);
+    
+    // 업데이트된 인센티브 조회
+    const updatedIncentive = await MonthlyIncentive.findByPk(id, {
+      include: [
+        {
+          model: User,
+          as: 'employee',
+          attributes: ['id', 'name', 'email', 'company', 'incentiveRate']
+        },
+        {
+          model: User,
+          as: 'approver',
+          attributes: ['id', 'name', 'email'],
+          required: false
+        }
+      ]
+    });
+    
+    console.log(`인센티브 ${id} ${status}됨 by ${viewerId} (${viewerRole})`);
+    res.json(updatedIncentive);
+    
+  } catch (error) {
+    console.error('인센티브 승인/반려 실패:', error);
     res.status(500).json({ message: '서버 에러가 발생했습니다.' });
   }
 });

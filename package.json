@@ -3,10 +3,11 @@
   "version": "1.0.0",
   "type": "module",
   "description": "BrandFlow Backend API Server",
-  "main": "test-server.js",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node test-server.js",
-    "dev": "node test-server.js",
+    "start": "node src/server.js",
+    "dev": "node src/server.js",
+    "test": "node test-server.js",
     "build": "echo 'No build needed for backend'"
   },
   "dependencies": {

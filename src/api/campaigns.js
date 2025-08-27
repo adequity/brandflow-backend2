@@ -7,6 +7,7 @@ import { Campaign, User, Post, Product } from '../models/index.js';
 import { Op } from 'sequelize';
 import sequelize from '../config/db.js';
 import NotificationService from '../services/notificationService.js';
+import { getViewer, getAccessScope, checkCampaignAccess } from '../utils/permissionUtils.js';
 
 const router = express.Router();
 
@@ -41,30 +42,6 @@ const upload = multer({
   }
 });
 
-/**
- * 호출자 정보 파싱:
- * - viewerId / viewerRole 은 쿼리에서 받고
- * - company 는 DB(User)에서 확정
- */
-async function getViewer(req) {
-  // 파라미터가 배열로 올 경우 첫 번째 값만 사용
-  const rawViewerId = req.query.viewerId || req.query.adminId;
-  const rawViewerRole = req.query.viewerRole || req.query.adminRole || '';
-  
-  const viewerId = Number(Array.isArray(rawViewerId) ? rawViewerId[0] : rawViewerId);
-  const viewerRole = String(Array.isArray(rawViewerRole) ? rawViewerRole[0] : rawViewerRole).trim();
-  
-  console.log('Raw params:', { rawViewerId, rawViewerRole });
-  console.log('Parsed params:', { viewerId, viewerRole });
-  
-  let viewerCompany = null;
-
-  if (viewerId && !isNaN(viewerId)) {
-    const v = await User.findByPk(viewerId, { attributes: ['id', 'company', 'role'] });
-    viewerCompany = v?.company ?? null;
-  }
-  return { viewerId, viewerRole, viewerCompany };
-}
 
 // posts는 별도 쿼리(separate)로 최신순 정렬
 const postsInclude = {
@@ -186,14 +163,26 @@ router.get('/', async (req, res) => {
 
 /**
  * GET /api/campaigns/:id
- * 단건 조회 (상세용)
+ * 단건 조회 (상세용) - 권한 검증 적용
  */
 router.get('/:id', async (req, res) => {
   try {
+    const { viewerId, viewerRole, viewerCompany } = await getViewer(req);
+    
     const campaign = await Campaign.findByPk(req.params.id, {
       include: commonInclude,
     });
-    if (!campaign) return res.status(404).json({ message: '캠페인을 찾을 수 없습니다.' });
+    
+    if (!campaign) {
+      return res.status(404).json({ message: '캠페인을 찾을 수 없습니다.' });
+    }
+    
+    // 캠페인 접근 권한 검증
+    const hasAccess = await checkCampaignAccess(viewerRole, viewerCompany, viewerId, campaign);
+    if (!hasAccess) {
+      return res.status(403).json({ message: '권한이 없습니다.' });
+    }
+    
     res.json(campaign);
   } catch (error) {
     console.error('캠페인 상세 조회 실패:', error);

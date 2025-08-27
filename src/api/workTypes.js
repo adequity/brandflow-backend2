@@ -1,5 +1,6 @@
 import express from 'express';
 import { User } from '../models/index.js';
+import { getViewer } from '../utils/permissionUtils.js';
 
 const router = express.Router();
 
@@ -16,11 +17,10 @@ let workTypes = [
 
 let nextId = 8;
 
-// 권한 체크 함수
+// 권한 체크 함수 (권한 유틸리티 적용)
 async function checkAdminPermission(req, res, next) {
   try {
-    const viewerId = req.query.viewerId || req.body.viewerId;
-    const viewerRole = req.query.viewerRole || req.body.viewerRole;
+    const { viewerId, viewerRole } = await getViewer(req);
     
     if (!viewerId || !viewerRole) {
       return res.status(401).json({ message: '인증 정보가 필요합니다.' });
@@ -30,6 +30,8 @@ async function checkAdminPermission(req, res, next) {
       return res.status(403).json({ message: '권한이 없습니다. 어드민만 업무타입을 관리할 수 있습니다.' });
     }
     
+    // 권한 정보를 req에 저장하여 다음 미들웨어에서 사용
+    req.viewer = { viewerId, viewerRole };
     next();
   } catch (error) {
     console.error('권한 체크 실패:', error);
@@ -75,7 +77,7 @@ router.get('/manage', checkAdminPermission, async (req, res) => {
 router.post('/', checkAdminPermission, async (req, res) => {
   try {
     const { name, description } = req.body;
-    const viewerId = req.query.viewerId || req.body.viewerId;
+    const { viewerId } = req.viewer; // checkAdminPermission에서 설정된 값 사용
     
     if (!name || !name.trim()) {
       return res.status(400).json({ message: '업무타입명은 필수입니다.' });
