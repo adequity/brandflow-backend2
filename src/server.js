@@ -55,7 +55,7 @@ app.use('/api/company', companyRoutes);
 app.use('/api/health', healthRoutes);
 
 app.get('/', (req, res) => {
-  res.send('BrandFlow 백엔드 서버가 정상적으로 동작하고 있습니다. v2.2.1');
+  res.send('BrandFlow 백엔드 서버가 정상적으로 동작하고 있습니다. v2.2.2 - Health API Ready');
 });
 
 async function startServer() {
