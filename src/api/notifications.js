@@ -1,27 +1,8 @@
 import express from 'express';
 import NotificationService from '../services/notificationService.js';
-import { User } from '../models/index.js';
+import { getViewer } from '../utils/permissionUtils.js';
 
 const router = express.Router();
-
-/**
- * 호출자 정보 파싱
- */
-async function getViewer(req) {
-  const rawViewerId = req.query.viewerId || req.query.adminId;
-  const rawViewerRole = req.query.viewerRole || req.query.adminRole || '';
-  
-  const viewerId = Number(Array.isArray(rawViewerId) ? rawViewerId[0] : rawViewerId);
-  const viewerRole = String(Array.isArray(rawViewerRole) ? rawViewerRole[0] : rawViewerRole).trim();
-  
-  let viewerCompany = null;
-
-  if (viewerId && !isNaN(viewerId)) {
-    const v = await User.findByPk(viewerId, { attributes: ['id', 'company', 'role'] });
-    viewerCompany = v?.company ?? null;
-  }
-  return { viewerId, viewerRole, viewerCompany };
-}
 
 /**
  * GET /api/notifications
