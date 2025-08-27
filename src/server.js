@@ -19,6 +19,7 @@ import systemSettingRoutes from './api/systemSettings.js';
 import monthlyIncentiveRoutes from './api/monthlyIncentives.js';
 import workTypeRoutes from './api/workTypes.js';
 import companyRoutes from './api/company.js';
+import healthRoutes from './api/health.js';
 
 const app = express();
 const PORT = process.env.PORT || 5004;
@@ -51,6 +52,7 @@ app.use('/api/system-settings', systemSettingRoutes);
 app.use('/api/monthly-incentives', monthlyIncentiveRoutes);
 app.use('/api/work-types', workTypeRoutes);
 app.use('/api/company', companyRoutes);
+app.use('/api/health', healthRoutes);
 
 app.get('/', (req, res) => {
   res.send('BrandFlow 백엔드 서버가 정상적으로 동작하고 있습니다. v2.2.0');

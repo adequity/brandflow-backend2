@@ -1,0 +1,29 @@
+{
+  "timestamp": "2025-08-27T02:58:14.892Z",
+  "scripts": [
+    {
+      "name": "cleanup-test-data.sql",
+      "path": "C:\\Users\\User\\Desktop\\brandflow-backend\\migrations\\cleanup-test-data.sql",
+      "size": 1858,
+      "created": "2025-08-27T02:58:14.889Z"
+    },
+    {
+      "name": "customer-setup.sql",
+      "path": "C:\\Users\\User\\Desktop\\brandflow-backend\\migrations\\customer-setup.sql",
+      "size": 2521,
+      "created": "2025-08-27T02:58:14.890Z"
+    },
+    {
+      "name": "data-validation.sql",
+      "path": "C:\\Users\\User\\Desktop\\brandflow-backend\\migrations\\data-validation.sql",
+      "size": 1118,
+      "created": "2025-08-27T02:58:14.891Z"
+    }
+  ],
+  "recommendations": [
+    "1. 프로덕션 배포 전 cleanup-test-data.sql 실행",
+    "2. customer-setup.sql로 실제 고객 계정 생성",
+    "3. data-validation.sql로 데이터 무결성 확인",
+    "4. 백업 시스템으로 마이그레이션 전후 백업 생성"
+  ]
+}
