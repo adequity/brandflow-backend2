@@ -1,6 +1,6 @@
 {
   "name": "brandflow-backend",
-  "version": "1.0.0",
+  "version": "2.2.2",
   "type": "module",
   "description": "BrandFlow Backend API Server",
   "main": "src/server.js",
