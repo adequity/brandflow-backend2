@@ -53,7 +53,7 @@ app.use('/api/work-types', workTypeRoutes);
 app.use('/api/company', companyRoutes);
 
 app.get('/', (req, res) => {
-  res.send('BrandFlow 백엔드 서버가 정상적으로 동작하고 있습니다. v2.1.0');
+  res.send('BrandFlow 백엔드 서버가 정상적으로 동작하고 있습니다. v2.2.0');
 });
 
 async function startServer() {
