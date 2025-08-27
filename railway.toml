@@ -8,3 +8,5 @@ restartPolicyMaxRetries = 10
 
 [env]
 NODE_ENV = "production"
+VERSION = "2.2.2"
+DEPLOY_FORCE = "true"
